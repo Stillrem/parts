@@ -1,14 +1,14 @@
 import * as cheerio from 'cheerio';
 import httpGet from './http_get.js';
 
-/* ========== helpers ========== */
+/* ===== helpers ===== */
 const BASE_SEARS = 'https://www.searspartsdirect.com';
 const BASE_RC    = 'https://www.repairclinic.com';
-
 const t = (s)=>String(s||'').replace(/\s+/g,' ').trim();
 const first = (...vals)=>{ for(const v of vals){ const x=t(v); if(x) return x; } return ''; };
 const pn = (s)=>{ const m=String(s).match(/[A-Z0-9\-]{5,}/i); return m?m[0].toUpperCase():''; };
 const isSearsCDN = (u)=>/^https?:\/\/s\.sears\.com\/is\/image\/Sears\//i.test(String(u||''));
+const detectOEM = (s)=>/\b(OEM|Genuine|Factory|Original)\b/i.test(s||'');
 
 function unwrapNext(src){
   if(!src) return '';
@@ -27,27 +27,49 @@ function absUrl(src, base){
   if (src.startsWith('//')) return 'https:'+src;
   if (/^https?:\/\//i.test(src)) return src;
   if (src.startsWith('/')) return base.replace(/\/$/,'') + src;
-  if (/\s+\d+x(?:,|$)/.test(src)) { // srcset → берём первый
-    const u0 = src.split(',')[0].trim().split(' ')[0].trim();
-    return absUrl(u0, base);
-  }
+  if (/\s+\d+x(?:,|$)/.test(src)) { const u0 = src.split(',')[0].trim().split(' ')[0].trim(); return absUrl(u0, base); }
   return src;
 }
 
+/* Sears: достать превью из всех возможных мест карточки */
 function pickSearsThumb($ctx){
-  let img = absUrl($ctx.find('img').attr('src')||'', BASE_SEARS);
-  if (isSearsCDN(img)) return img;
-  $ctx.find('img').each((_,el)=>{
-    const raw = el.attribs?.src || el.attribs?.['data-src'] || el.attribs?.srcset || '';
-    const abs = absUrl(raw, BASE_SEARS);
-    if (isSearsCDN(abs)){ img = abs; return false; }
-  });
-  return img || '';
+  // 1) прямые
+  let img =
+    absUrl($ctx.find('img').attr('src')||'', BASE_SEARS) ||
+    absUrl($ctx.find('img').attr('data-src')||'', BASE_SEARS);
+
+  // 2) srcset / data-srcset
+  if (!isSearsCDN(img)) {
+    const srcset = $ctx.find('img').attr('srcset') || $ctx.find('img').attr('data-srcset') || '';
+    if (srcset) img = absUrl(srcset, BASE_SEARS);
+  }
+
+  // 3) <picture><source srcset=...>
+  if (!isSearsCDN(img)) {
+    let found = '';
+    $ctx.find('picture source').each((_,s)=>{
+      if (found) return;
+      const ss = $(s).attr('srcset') || '';
+      const abs = absUrl(ss, BASE_SEARS);
+      if (isSearsCDN(abs)) found = abs;
+    });
+    if (found) img = found;
+  }
+
+  // 4) запасной обход всех <img> в карточке
+  if (!isSearsCDN(img)) {
+    $ctx.find('img').each((_,el)=>{
+      if (img && isSearsCDN(img)) return;
+      const raw = el.attribs?.src || el.attribs?.['data-src'] || el.attribs?.srcset || el.attribs?.['data-srcset'] || '';
+      const abs = absUrl(raw, BASE_SEARS);
+      if (isSearsCDN(abs)) img = abs;
+    });
+  }
+
+  return isSearsCDN(img) ? img : '';
 }
 
-function detectOEM(s){ return /\b(OEM|Genuine|Factory|Original)\b/i.test(s||''); }
-
-/* ===== generic RC fallbacks ===== */
+/* RC fallbacks */
 function rcFromJsonLD($){
   const out = [];
   $('script[type="application/ld+json"]').each((_,el)=>{
@@ -99,45 +121,51 @@ function rcFromNextData($){
   return out.filter(x=>{ if(!x.link||seen.has(x.link)) return false; seen.add(x.link); return true; });
 }
 
-/* ===== Sears: добор картинок с целевой страницы (модели/детали) ===== */
-async function searsEnrichImages(items, limit=6){
+/* Sears: добор картинок с целевой страницы (модель/деталь) */
+async function searsEnrichImages(items, limit=24){
   let used=0;
   for (const it of items){
     if (used>=limit) break;
     if (it.source!=='SearsPartsDirect') continue;
     if (it.image) continue;
     if (!it.url) continue;
-    const isModel = /\/model\//i.test(it.url);
-    const isPart  = /\/part\/|\/product\//i.test(it.url);
+
     try{
       const base = it.url.split('/').slice(0,3).join('/');
       const html = await httpGet(it.url, { 'Referer': base+'/' });
       const $ = cheerio.load(html);
       let found = '';
 
-      if (isModel){
-        // ищем первую карточку детали
-        $('a[href*="/part/"], a[href*="/product/"]').each((_,a)=>{
-          if (found) return;
-          const box = $(a).closest('.part-card, .product-card, .card, [data-component="product-card"]');
-          const raw = box.find('img').attr('src') || box.find('img').attr('srcset') || '';
-          const abs = absUrl(raw, BASE_SEARS);
-          if (isSearsCDN(abs)) found = abs;
-        });
-      }
+      // приоритет — картинки деталей внутри страницы
+      $('a[href*="/part/"], a[href*="/product/"]').each((_,a)=>{
+        if (found) return;
+        const box = $(a).closest('.part-card, .product-card, .card, [data-component="product-card"]');
+        const raw = box.find('img').attr('src') || box.find('img').attr('data-src') || box.find('img').attr('srcset') || box.find('img').attr('data-srcset') || '';
+        const abs = absUrl(raw, BASE_SEARS);
+        if (isSearsCDN(abs)) found = abs;
+        if (!found){
+          // picture>source на странице детали/модели
+          box.find('picture source').each((_,s)=>{
+            if (found) return;
+            const ss = $(s).attr('srcset') || '';
+            const abs2 = absUrl(ss, BASE_SEARS);
+            if (isSearsCDN(abs2)) found = abs2;
+          });
+        }
+      });
 
+      // любой <img> на странице, но только Sears CDN
       if (!found){
-        // с любой страницы: любой img, но только Sears CDN
         $('img').each((_,img)=>{
           if (found) return;
-          const raw = $(img).attr('src') || $(img).attr('srcset') || '';
+          const raw = $(img).attr('src') || $(img).attr('data-src') || $(img).attr('srcset') || $(img).attr('data-srcset') || '';
           const abs = absUrl(raw, BASE_SEARS);
           if (isSearsCDN(abs)) found = abs;
         });
       }
 
-      if (!found && isPart){
-        // как крайний случай на странице детали — og:image, но только с Sears CDN
+      // крайний случай — og:image, только если с Sears CDN
+      if (!found){
         const og = $('meta[property="og:image"]').attr('content') || '';
         const abs = absUrl(og, BASE_SEARS);
         if (isSearsCDN(abs)) found = abs;
@@ -149,9 +177,8 @@ async function searsEnrichImages(items, limit=6){
   return items;
 }
 
-/* ========== SOURCES ========== */
+/* ===== SOURCES ===== */
 export const sources = [
-  /* -------- SearsPartsDirect -------- */
   {
     name: 'SearsPartsDirect',
     searchUrl: (q)=> `${BASE_SEARS}/search?q=${encodeURIComponent(q)}`,
@@ -159,7 +186,7 @@ export const sources = [
       const $ = cheerio.load(html);
       const out = [];
 
-      // детали/товары (сразу с миниатюрами из Sears CDN)
+      // детали/товары
       $('.part-card, .product-card, .card, [data-component="product-card"], a[href*="/part/"], a[href*="/product/"]').each((_,el)=>{
         const el$ = $(el);
         const a$  = el$.is('a') ? el$ : el$.find('a[href]').first();
@@ -182,7 +209,6 @@ export const sources = [
 
       // модели (карточки + любые ссылки на /model/)
       if (!out.length){
-        // карточки
         $('.model-card, [data-component="model-card"], .card, .product-card').each((_,el)=>{
           const el$ = $(el);
           let modelHref = '';
@@ -190,16 +216,17 @@ export const sources = [
             const h = $(a).attr('href') || '';
             const txt = t($(a).text()).toLowerCase();
             if (/\/model\//i.test(h)) modelHref = modelHref || h;
-            if (/shop\s*parts/i.test(txt) && h) modelHref = h; // приоритет кнопке
+            if (/shop\s*parts/i.test(txt) && h) modelHref = h;
           });
           if (!modelHref) return;
+
           const link = absUrl(modelHref, BASE_SEARS);
           const title = first(el$.find('.card-title, .product-title, .model-title').text(), el$.attr('aria-label'), el$.text());
           const image = pickSearsThumb(el$);
-          out.push({ title:t(title), link, image, source:'SearsPartsDirect', part_number: pn(title), oem_flag: detectOEM(title) });
+
+          out.push({ title: t(title), link, image, source:'SearsPartsDirect', part_number: pn(title), oem_flag: detectOEM(title) });
         });
 
-        // любые ссылки /model/ по странице
         if (!out.length){
           const seen = new Set();
           $('a[href*="/model/"]').each((_,a)=>{
@@ -213,8 +240,8 @@ export const sources = [
         }
       }
 
-      // добираем картинки у моделей/деталей без превью (до 6 запросов)
-      await searsEnrichImages(out, 6);
+      // добор картинок у Sears (до 24 карточек)
+      await searsEnrichImages(out, 24);
 
       // de-dup
       const seen = new Set();
@@ -222,7 +249,6 @@ export const sources = [
     }
   },
 
-  /* -------- RepairClinic -------- */
   {
     name: 'RepairClinic',
     searchUrl: (q)=> `${BASE_RC}/Shop-For-Parts?query=${encodeURIComponent(q)}`,
@@ -244,8 +270,6 @@ export const sources = [
           a$.attr('title'),
           el$.text()
         );
-
-        // картинки берём из разных мест: data-*, srcset, src → разворачиваем
         let imgRaw = el$.find('img').attr('data-src')
                  || el$.find('img').attr('data-original')
                  || el$.find('img').attr('data-srcset')
@@ -262,33 +286,25 @@ export const sources = [
         });
       });
 
-      // JSON-LD
+      // JSON-LD / Next.js
       if (!out.length){
         const ld = rcFromJsonLD($);
         if (ld.length) out = ld.map(x=>({ ...x, source:'RepairClinic', part_number: pn(x.title) }));
       }
-
-      // Next.js data
       if (!out.length){
         const nx = rcFromNextData($);
         if (nx.length) out = nx.map(x=>({ ...x, source:'RepairClinic', part_number: pn(x.title) }));
       }
 
-      // если всё же пусто — правильная ссылка на поиск
+      // если пусто — ссылка на правильный поиск
       if (!out.length && q){
-        out.push({
-          title:`Открыть поиск RepairClinic: ${q}`,
-          link: `${BASE_RC}/Shop-For-Parts?query=${encodeURIComponent(q)}`,
-          image:'',
-          source:'RepairClinic',
-          part_number: pn(q)
-        });
+        out.push({ title:`Открыть поиск RepairClinic: ${q}`, link:`${BASE_RC}/Shop-For-Parts?query=${encodeURIComponent(q)}`, image:'', source:'RepairClinic', part_number: pn(q) });
       }
 
-      // попытка добора картинок для карточек RC без фото: идём на страницу детали и берём og:image
+      // добор картинок на RC из og:image (до 8 карточек)
       let used = 0;
       for (const it of out){
-        if (used>=6) break;
+        if (used>=8) break;
         if (it.image || !it.link) continue;
         try{
           const base = it.link.split('/').slice(0,3).join('/');
@@ -297,7 +313,7 @@ export const sources = [
           const og = $2('meta[property="og:image"]').attr('content') || '';
           const abs = absUrl(og, base);
           if (abs) { it.image = abs; used++; }
-        }catch{ /* ignore */ }
+        }catch{}
       }
 
       const seen = new Set();
