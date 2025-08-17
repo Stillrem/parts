@@ -117,33 +117,69 @@ export async function aggregate(q) {
     }
   }
 
-  // 2) Sears: если картинка ПУСТАЯ ИЛИ это именно «наша, построенная по PN»,
-  //    делаем один запрос на PDP и берём og:image (фикс для случаев вроде 5304509458 -> 5304464097).
-  const toFetchPDP = [];
-  for (const it of clean) {
-    if (it.supplier !== 'SearsPartsDirect') continue;
-    if (!it.url) continue;
-    if (!it.image || BUILT_SEARS_PN_IMG.test(String(it.image))) {
-      toFetchPDP.push(it);
-      if (toFetchPDP.length >= 12) break; // ограничение на запросы
-    }
+// 2) Sears: если картинка ПУСТАЯ ИЛИ это «наша, построенная по PN»,
+//    делаем запрос на PDP и пытаемся достать реальную картинку,
+//    проверяя og:image, <img>, srcset, а при необходимости — PN из тела HTML.
+const toFetchPDP = [];
+for (const it of clean) {
+  if (it.supplier !== 'SearsPartsDirect') continue;
+  if (!it.url) continue;
+  if (!it.image || BUILT_SEARS_PN_IMG.test(String(it.image))) {
+    toFetchPDP.push(it);
+    if (toFetchPDP.length >= 16) break; // разумный лимит на запрос
   }
+}
 
-  await Promise.allSettled(
-    toFetchPDP.map(async (it) => {
-      try {
-        const html = await httpGet(it.url, { Referer: 'https://www.searspartsdirect.com/' });
-        const $ = cheerio.load(html);
-        let og = $('meta[property="og:image"]').attr('content') || '';
-        if (og) {
-          og = normalizeSearsImage(og);
-          it.image = og;
-        }
-      } catch {
-        // тихо пропускаем
+await Promise.allSettled(
+  toFetchPDP.map(async (it) => {
+    try {
+      const html = await httpGet(it.url, {
+        Referer: 'https://www.searspartsdirect.com/',
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9'
+      });
+
+      const $ = cheerio.load(html);
+
+      // 1) og:image
+      let found =
+        $('meta[property="og:image"]').attr('content') ||
+        $('meta[name="og:image"]').attr('content') || '';
+
+      // 2) любые IMG/SOURCE, ведущие на s.sears.com/is/image/Sears/PD_0022_628_*
+      if (!found) {
+        $('img,source').each((_, el) => {
+          if (found) return;
+          const cand =
+            el.attribs?.srcset ||
+            el.attribs?.['data-srcset'] ||
+            el.attribs?.src ||
+            el.attribs?.['data-src'] ||
+            '';
+          const m = String(cand).match(/https?:\/\/s\.sears\.com\/is\/image\/Sears\/PD_0022_628_[^?\s,]+/i);
+          if (m) found = m[0];
+        });
       }
-    })
-  );
+
+      // 3) Последняя страховка: PN из тела HTML -> построим URL сами
+      if (!found) {
+        const m = String(html).match(/PD_0022_628_(\d{7,})/i);
+        if (m && m[1]) {
+          found = searsImageFromPN(m[1]); // построим JPEG с размерами
+        }
+      }
+
+      if (found) {
+        // нормализуем размеры, если в og:image их нет
+        found = normalizeSearsImage(found);
+        it.image = found;
+      }
+    } catch {
+      // тихо пропускаем
+    }
+  })
+);
 
   // 3) Проксируем Sears/RC картинки через /api/img
   for (const it of clean) {
