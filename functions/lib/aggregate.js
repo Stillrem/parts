@@ -45,9 +45,7 @@ function normalizeSearsImage(u) {
       return url.toString();
     }
     return u;
-  } catch {
-    return u;
-  }
+  } catch { return u; }
 }
 
 // Нормализация картинок RepairClinic (относительные → абсолютные)
@@ -98,6 +96,37 @@ function findAnyImageFromHtml(html, baseHost) {
   catch { return found; }
 }
 
+// Достать возможные «старые PN» из HTML PDP
+function extractPrevPNsFromHtml(html, currentPN='') {
+  const prev = new Set();
+
+  // 1) Фразы вида: Replaces #5304464097, Substitutes: 5304464097, Previous part numbers ...
+  const rxBlocks = [
+    /Replaces[^<>\n]*?(\d{7,}([,\s/]|$))/gi,
+    /Substitutes[^<>\n]*?(\d{7,}([,\s/]|$))/gi,
+    /Substitution[^<>\n]*?(\d{7,}([,\s/]|$))/gi,
+    /Previous[^<>\n]*?(\d{7,}([,\s/]|$))/gi,
+    /Part\s+replaces[^<>\n]*?(\d{7,}([,\s/]|$))/gi
+  ];
+  for (const rx of rxBlocks) {
+    let m;
+    while ((m = rx.exec(html))) {
+      const nums = String(m[0]).match(/\d{7,}/g) || [];
+      nums.forEach(n => prev.add(n));
+    }
+  }
+
+  // 2) Общий сбор всех PN рядом со словами part/replace/substitute (подстраховка)
+  const near = /(?:part|replac|substitut|previous)[^]{0,120}?(\d{7,})/gi;
+  let m2;
+  while ((m2 = near.exec(html))) prev.add(m2[1]);
+
+  // 3) Фильтрация
+  if (currentPN) prev.delete(String(currentPN));
+  // Оставим максимум 10 шт.
+  return Array.from(prev).slice(0, 10);
+}
+
 /* ---------- мапа «PN детали → PN картинки» (точечно) ---------- */
 /* У этих трёх карточек фото хранится под другим PN на CDN. */
 const SEARS_IMG_PN_REDIRECT = {
@@ -134,6 +163,7 @@ export async function aggregate(q) {
           price: x.price || '',
           currency: x.currency || '',
           part_number: x.part_number || '',
+          prev_part_numbers: x.prev_part_numbers || [],   // <— добавили
           availability: x.availability || '',
           oem_flag: x.oem_flag || false
         });
@@ -153,9 +183,9 @@ export async function aggregate(q) {
     return true;
   });
 
-  /* ---------- постобработка изображений ---------- */
+  /* ---------- постобработка изображений + добор данных с PDP ---------- */
 
-  // 1) Sears: если нет картинки ИЛИ она «словесная» — строим по PN
+  // 1) Sears: если нет картинки ИЛИ она «словесная» — строим по PN (учитываем редиректы PN→PN для фото)
   const BAD_SEARS_IMG = /PD_0022_628_(KENMORE|CROSLEY|MICROWAVE|WHITE-WESTINGHOUSE|LATCH)\b/i;
   for (const it of clean) {
     if (it.supplier !== 'SearsPartsDirect') continue;
@@ -164,7 +194,7 @@ export async function aggregate(q) {
     const missing = !it.image;
     const bad = it.image && BAD_SEARS_IMG.test(it.image);
     if (pn && (missing || bad)) {
-      const imgPN = SEARS_IMG_PN_REDIRECT[pn] || pn; // ← ключевая правка
+      const imgPN = SEARS_IMG_PN_REDIRECT[pn] || pn;
       it.image = searsImageFromPN(imgPN);
     }
   }
@@ -181,7 +211,7 @@ export async function aggregate(q) {
     if (isRC && !it.image) {
       toFetchPDP.push(it);
     }
-    if (toFetchPDP.length >= 16) break; // лимит на PDP-запросы — как в рабочем варианте
+    if (toFetchPDP.length >= 16) break; // лимит на PDP-запросы — как у тебя работало стабильно
   }
 
   await Promise.allSettled(
@@ -197,6 +227,32 @@ export async function aggregate(q) {
         const host = new URL(it.url).hostname;
         let img = findAnyImageFromHtml(html, host);
 
+        // Sears: если картинки не нашли — попробуем «замещающий PN» (Replaces #…)
+        if (!img && host.includes('searspartsdirect.com')) {
+          const replPNs = extractPrevPNsFromHtml(html, it.part_number);
+          if (replPNs.length) {
+            // используем первый как наиболее релевантный для фото
+            img = searsImageFromPN(replPNs[0]);
+            // и одновременно сохраним весь список предыдущих PN
+            it.prev_part_numbers = Array.from(new Set([...(it.prev_part_numbers||[]), ...replPNs]));
+          }
+        }
+
+        // RepairClinic: тоже попробуем собрать previous PN (часто указаны в описании)
+        if (host.includes('repairclinic.com')) {
+          const prevRC = extractPrevPNsFromHtml(html, it.part_number);
+          if (prevRC.length) {
+            it.prev_part_numbers = Array.from(new Set([...(it.prev_part_numbers||[]), ...prevRC]));
+          }
+        }
+
+        // Последний шанс для Sears — иллюстрация по исходному PN
+        if (!img && host.includes('searspartsdirect.com')) {
+          const rawPN = (String(it.part_number || '').match(/\d{7,}/) || [])[0] || '';
+          const pnForImage = SEARS_IMG_PN_REDIRECT[rawPN] || rawPN;
+          if (pnForImage) img = searsIllustrationFromPN(pnForImage);
+        }
+
         if (img) {
           if (host.includes('searspartsdirect.com')) img = normalizeSearsImage(img);
           if (host.includes('repairclinic.com'))      img = normalizeRCImage(img);
@@ -208,36 +264,30 @@ export async function aggregate(q) {
     })
   );
 
-  // 2c) Sears: если картинка "построенная из PN" и на CDN её нет — переключаемся на _Illustration
-  async function checkSearsAndMaybeIllustration(it) {
-    const rawPN = (String(it.part_number || '').match(/\d{7,}/) || [])[0] || '';
-    const pn = SEARS_IMG_PN_REDIRECT[rawPN] || rawPN;   // ← учитываем редиректы PN картинок
-    if (!pn) return;
-    if (!BUILT_SEARS_PN_IMG.test(String(it.image || ''))) return;
-    try {
-      const testUrl = searsImageFromPN(pn, { wid: 285, hei: 200, qlt: 90, sharpen: 2 });
-      const resp = await fetch(testUrl, { method: 'HEAD' });
-      if (!resp.ok) {
-        it.image = searsIllustrationFromPN(pn, { wid: 285, hei: 200, qlt: 90, sharpen: 2 });
-      }
-    } catch {
-      it.image = searsIllustrationFromPN(pn, { wid: 285, hei: 200, qlt: 90, sharpen: 2 });
-    }
-  }
-  {
-    const candidates = [];
-    for (const it of clean) {
-      if (it.supplier === 'SearsPartsDirect' && BUILT_SEARS_PN_IMG.test(String(it.image || ''))) {
-        candidates.push(it);
-        if (candidates.length >= 16) break;
-      }
-    }
-    await Promise.allSettled(candidates.map(checkSearsAndMaybeIllustration));
-  }
-
   // 3) Проксируем Sears/RC картинки через /api/img
   for (const it of clean) {
     if (it.image) it.image = proxyImage(it.image);
+  }
+
+  /* ---------- форматируем отображаемое имя с PN и Previous ---------- */
+  for (const it of clean) {
+    const lines = [];
+    const baseName = (it.name || '').trim();
+    if (baseName) lines.push(baseName);
+
+    const currentPN = (String(it.part_number||'').match(/\d{7,}/)||[])[0] || it.part_number || '';
+    if (currentPN) lines.push(`Part #${currentPN}`);
+
+    if (it.prev_part_numbers && it.prev_part_numbers.length) {
+      const prev = Array.from(new Set(it.prev_part_numbers.filter(p => String(p) !== String(currentPN))));
+      if (prev.length) {
+        lines.push('Previous part numbers');
+        prev.forEach(p => lines.push(`Part #${p}`));
+      }
+    }
+
+    // Обновляем name: заголовок станет многострочным в карточке, как ты хотел
+    if (lines.length) it.name = lines.join('\n');
   }
 
   return { items: clean, meta };
