@@ -45,7 +45,9 @@ function normalizeSearsImage(u) {
       return url.toString();
     }
     return u;
-  } catch { return u; }
+  } catch {
+    return u;
+  }
 }
 
 // Нормализация картинок RepairClinic (относительные → абсолютные)
@@ -65,7 +67,7 @@ function proxyImage(u) {
   return `/api/img?u=${encodeURIComponent(u)}`;
 }
 
-// «Наша» PN-картинка (чтобы понять, что нужно перепроверить на PDP)
+// «Наша» PN-картинка (чтобы понять, что нужно перепроверить на PDP/HEAD)
 const BUILT_SEARS_PN_IMG = /https?:\/\/s\.sears\.com\/is\/image\/Sears\/PD_0022_628_\d+\b/i;
 
 // Универсальный поиск картинки в HTML: og:image -> img/source -> Sears PN в тексте
@@ -94,14 +96,6 @@ function findAnyImageFromHtml(html, baseHost) {
   if (!found) return '';
   try { return new URL(found, `https://${baseHost}`).toString(); }
   catch { return found; }
-}
-
-// Извлечь «замещающий» PN у Sears (текст "Replaces #5304464097")
-function findReplacementPNFromHtml(html) {
-  const rx = /Replaces\s*#?\s*(\d{7,})/ig;
-  let m, last = '';
-  while ((m = rx.exec(html))) last = m[1];
-  return last; // берём последний — обычно верный
 }
 
 /* ---------- main ---------- */
@@ -163,7 +157,6 @@ export async function aggregate(q) {
   }
 
   // 2) Догруз с PDP для Sears и RepairClinic (если пусто или «наша по PN»)
-  const MAX_PDP = 40;
   const toFetchPDP = [];
   for (const it of clean) {
     if (!it.url) continue;
@@ -175,7 +168,7 @@ export async function aggregate(q) {
     if (isRC && !it.image) {
       toFetchPDP.push(it);
     }
-    if (toFetchPDP.length >= MAX_PDP) break;
+    if (toFetchPDP.length >= 16) break; // лимит на PDP-запросы
   }
 
   await Promise.allSettled(
@@ -191,36 +184,44 @@ export async function aggregate(q) {
         const host = new URL(it.url).hostname;
         let img = findAnyImageFromHtml(html, host);
 
-        // Sears: если картинки не нашли — попробуем «замещающий PN» (Replaces #…)
-        if (!img && host.includes('searspartsdirect.com')) {
-          const replPN = findReplacementPNFromHtml(html);
-          if (replPN) img = searsImageFromPN(replPN);
-        }
-
-        if (!img && host.includes('searspartsdirect.com')) {
-          // последний шанс — иллюстрация по исходному PN
-          const pn = (String(it.part_number || '').match(/\d{7,}/) || [])[0] || '';
-          if (pn) img = searsIllustrationFromPN(pn);
-        }
-
         if (img) {
           if (host.includes('searspartsdirect.com')) img = normalizeSearsImage(img);
           if (host.includes('repairclinic.com'))      img = normalizeRCImage(img);
           it.image = img;
         }
-      } catch { /* пропускаем */ }
+      } catch {
+        // пропускаем
+      }
     })
   );
 
-  // 2b) Второй проход — если всё ещё "наша PN-картинка", заменяем на _Illustration
-  for (const it of clean) {
-    if (it.supplier !== 'SearsPartsDirect') continue;
-    if (!BUILT_SEARS_PN_IMG.test(String(it.image || ''))) continue;
+  // 2c) Sears: если картинка "построенная из PN" и на CDN её нет — переключаемся на _Illustration
+  async function checkSearsAndMaybeIllustration(it) {
     const pn = (String(it.part_number || '').match(/\d{7,}/) || [])[0] || '';
-    if (pn) it.image = searsIllustrationFromPN(pn);
+    if (!pn) return;
+    if (!BUILT_SEARS_PN_IMG.test(String(it.image || ''))) return;
+    try {
+      const testUrl = searsImageFromPN(pn, { wid: 285, hei: 200, qlt: 90, sharpen: 2 });
+      const resp = await fetch(testUrl, { method: 'HEAD' });
+      if (!resp.ok) {
+        it.image = searsIllustrationFromPN(pn, { wid: 285, hei: 200, qlt: 90, sharpen: 2 });
+      }
+    } catch {
+      it.image = searsIllustrationFromPN(pn, { wid: 285, hei: 200, qlt: 90, sharpen: 2 });
+    }
+  }
+  {
+    const candidates = [];
+    for (const it of clean) {
+      if (it.supplier === 'SearsPartsDirect' && BUILT_SEARS_PN_IMG.test(String(it.image || ''))) {
+        candidates.push(it);
+        if (candidates.length >= 16) break;
+      }
+    }
+    await Promise.allSettled(candidates.map(checkSearsAndMaybeIllustration));
   }
 
-  // 3) Проксируем картинки через /api/img
+  // 3) Проксируем Sears/RC картинки через /api/img
   for (const it of clean) {
     if (it.image) it.image = proxyImage(it.image);
   }
