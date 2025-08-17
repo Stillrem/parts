@@ -152,7 +152,7 @@ export async function aggregate(q) {
   // 1) Sears: если нет картинки ИЛИ она «словесная» — строим по PN
   const BAD_SEARS_IMG = /PD_0022_628_(KENMORE|CROSLEY|MICROWAVE|WHITE-WESTINGHOUSE|LATCH)\b/i;
   for (const it of clean) {
-    if (it.supplier !== 'SearsPartsDirect') continue;   // ← исправлено: без лишней скобки
+    if (it.supplier !== 'SearsPartsDirect') continue;
     const pnMatch = String(it.part_number || '').match(/\d{7,}/);
     const pn = pnMatch ? pnMatch[0] : '';
     const missing = !it.image;
@@ -163,6 +163,7 @@ export async function aggregate(q) {
   }
 
   // 2) Догруз с PDP для Sears и RepairClinic (если пусто или «наша по PN»)
+  const MAX_PDP = 40;
   const toFetchPDP = [];
   for (const it of clean) {
     if (!it.url) continue;
@@ -174,7 +175,7 @@ export async function aggregate(q) {
     if (isRC && !it.image) {
       toFetchPDP.push(it);
     }
-    if (toFetchPDP.length >= 12) break; // умеренный лимит
+    if (toFetchPDP.length >= MAX_PDP) break;
   }
 
   await Promise.allSettled(
@@ -210,6 +211,14 @@ export async function aggregate(q) {
       } catch { /* пропускаем */ }
     })
   );
+
+  // 2b) Второй проход — если всё ещё "наша PN-картинка", заменяем на _Illustration
+  for (const it of clean) {
+    if (it.supplier !== 'SearsPartsDirect') continue;
+    if (!BUILT_SEARS_PN_IMG.test(String(it.image || ''))) continue;
+    const pn = (String(it.part_number || '').match(/\d{7,}/) || [])[0] || '';
+    if (pn) it.image = searsIllustrationFromPN(pn);
+  }
 
   // 3) Проксируем картинки через /api/img
   for (const it of clean) {
