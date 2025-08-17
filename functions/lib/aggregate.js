@@ -2,11 +2,16 @@
 import { sources } from './sources.js';
 import httpGet from './http_get.js';
 
-// Построение корректного изображения Sears по парт-номеру (без доп. запросов)
-function searsImageFromPN(pn, { w = 285, h = 200, q = 90, sharpen = 2 } = {}) {
+// Построение корректного изображения Sears по парт-номеру (Scene7/Adobe IS)
+function searsImageFromPN(
+  pn,
+  { wid = 285, hei = 200, qlt = 90, sharpen = 2 } = {}
+) {
   pn = String(pn || '').trim();
   if (!pn) return '';
-  return `https://s.sears.com/is/image/Sears/PD_0022_628_${pn}?f=webp&w=${w}&h=${h}&quality=${q}&sharpen=${sharpen}`;
+  // Надёжный формат для CDN Sears (JPEG):
+  // wid/hei – размеры, fmt=pjpg – прогрессивный JPEG, qlt – качество, op_sharpen – резкость
+  return `https://s.sears.com/is/image/Sears/PD_0022_628_${pn}?wid=${wid}&hei=${hei}&fmt=pjpg&qlt=${qlt}&op_sharpen=${sharpen}`;
 }
 
 export async function aggregate(q) {
