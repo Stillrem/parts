@@ -9,3 +9,23 @@
   from = "/api/*"
   to = "/.netlify/functions/:splat"
   status = 200
+
+  # netlify.toml
+[[headers]]
+for = "/*"
+  [headers.values]
+  # Разрешаем внешние картинки (Sears CDN и RC)
+  Content-Security-Policy = '''
+    default-src 'self';
+    img-src 'self' data: https: s.sears.com www.repairclinic.com rcappliancepartsimages.com;
+    connect-src 'self' https://www.searspartsdirect.com https://www.repairclinic.com;
+    script-src 'self';
+    style-src 'self' 'unsafe-inline';
+    object-src 'none';
+    base-uri 'self';
+    frame-ancestors 'self';
+  '''
+  Referrer-Policy = "no-referrer-when-downgrade"
+  X-Content-Type-Options = "nosniff"
+  X-Frame-Options = "DENY"
+  X-XSS-Protection = "0"
