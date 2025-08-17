@@ -10,7 +10,7 @@
   <header>
     <h1>Поиск запчастей</h1>
     <form id="searchForm">
-      <input id="q" type="text" placeholder="Модель или парт-номер (например 5304509451)" autocomplete="off">
+      <input id="q" type="text" placeholder="Модель или парт-номер (например 5304509451 / FFMV164LSA)" autocomplete="off">
       <button type="submit">Искать</button>
       <label class="inline">
         Поставщик:
@@ -20,6 +20,8 @@
           <option value="RepairClinic">RepairClinic</option>
         </select>
       </label>
+      <label class="inline"><input type="checkbox" id="onlyOEM"> Только OEM</label>
+      <label class="inline"><input type="checkbox" id="onlyInStock"> Только в наличии</label>
       <button type="button" id="exportBtn">Экспорт CSV</button>
     </form>
   </header>

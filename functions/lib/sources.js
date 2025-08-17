@@ -1,3 +1,4 @@
+
 import * as cheerio from 'cheerio';
 
 /* helpers */
@@ -40,6 +41,7 @@ function pickSearsThumb($ctx){
   return img || '';
 }
 function partNumberFrom(s){ const m = String(s).match(/[A-Z0-9\-]{5,}/i); return m?m[0].toUpperCase():''; }
+function detectOEM(name){ return /\b(OEM|Genuine|Factory|Original)\b/i.test(name||''); }
 
 /* sources */
 export const sources = [
@@ -58,7 +60,12 @@ export const sources = [
         const title = firstNonEmpty(el$.find('.card-title').text(), el$.find('.product-title').text(), el$.text());
         const link = absolutize(href, 'https://www.searspartsdirect.com');
         const image = pickSearsThumb(el$);
-        out.push({ title, link, image, source:'SearsPartsDirect', part_number: partNumberFrom(title) });
+        const availability = textClean(el$.find('.availability, [data-qa="availability"]').text());
+        out.push({ title, link, image, source:'SearsPartsDirect',
+          part_number: partNumberFrom(title),
+          availability,
+          oem_flag: detectOEM(title)
+        });
       });
       // models fallback
       if (!out.length){
@@ -67,7 +74,6 @@ export const sources = [
           const a$ = el$.find('a[href]').first();
           const href = a$.attr('href') || '';
           if (!/\/model\//i.test(href||'')) return;
-          // try find "Shop parts"
           let shop = '';
           el$.find('a[href]').each((_,x)=>{
             const t = textClean($(x).text()).toLowerCase();
@@ -77,7 +83,11 @@ export const sources = [
           const link = absolutize(shop||href, 'https://www.searspartsdirect.com');
           const title = textClean(el$.text());
           const image = pickSearsThumb(el$);
-          out.push({ title, link, image, source:'SearsPartsDirect', part_number: partNumberFrom(title) });
+          out.push({ title, link, image, source:'SearsPartsDirect',
+            part_number: partNumberFrom(title),
+            availability: '',
+            oem_flag: detectOEM(title)
+          });
         });
       }
       return out;
@@ -108,8 +118,13 @@ export const sources = [
                  || el$.find('img').attr('src')
                  || '';
         const image = absolutize(imgRaw, 'https://www.repairclinic.com');
+        const availability = textClean(el$.find('.availability, [data-qa="availability"]').text());
         const link = absolutize(href, 'https://www.repairclinic.com');
-        out.push({ title, link, image, source:'RepairClinic', part_number: partNumberFrom(title) });
+        out.push({ title, link, image, source:'RepairClinic',
+          part_number: partNumberFrom(title),
+          availability,
+          oem_flag: detectOEM(title)
+        });
       });
       return out;
     }

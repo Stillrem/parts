@@ -1,3 +1,4 @@
+
 import { sources } from './sources.js';
 import httpGet from './http_get.js';
 
@@ -14,7 +15,6 @@ export async function aggregate(q){
     if (r.status === 'fulfilled'){
       const arr = Array.isArray(r.value) ? r.value : [];
       meta.sources.push({ name, ok:true, count:arr.length });
-      // normalize
       arr.forEach(x => items.push({
         supplier: name,
         name: x.title || x.name || '',
@@ -22,7 +22,9 @@ export async function aggregate(q){
         image: x.image || '',
         price: x.price || '',
         currency: x.currency || '',
-        part_number: x.part_number || ''
+        part_number: x.part_number || '',
+        availability: x.availability || '',
+        oem_flag: x.oem_flag || false
       }));
     } else {
       meta.sources.push({ name, ok:false, error: String(r.reason?.message || r.reason) });

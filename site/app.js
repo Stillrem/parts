@@ -4,6 +4,9 @@ const supplierSel = document.getElementById('supplier');
 const exportBtn = document.getElementById('exportBtn');
 const equivBox = document.getElementById('equivBox');
 const equivList = document.getElementById('equivList');
+const onlyOEM = document.getElementById('onlyOEM');
+const onlyInStock = document.getElementById('onlyInStock');
+
 let lastRows = [];
 
 form.addEventListener('submit', async (e)=>{
@@ -13,6 +16,8 @@ form.addEventListener('submit', async (e)=>{
   await runSearch(q);
 });
 supplierSel.addEventListener('change', ()=> reRender());
+onlyOEM.addEventListener('change', ()=> reRender());
+onlyInStock.addEventListener('change', ()=> reRender());
 exportBtn.addEventListener('click', ()=> exportCSV());
 
 async function runSearch(q){
@@ -33,6 +38,8 @@ async function runSearch(q){
 function reRender(){
   let rows = [...lastRows];
   if (supplierSel.value) rows = rows.filter(r => (r.supplier||'') === supplierSel.value);
+  if (onlyOEM.checked) rows = rows.filter(r => (r.oem_flag||'').toString().toLowerCase() === 'true');
+  if (onlyInStock.checked) rows = rows.filter(r => /in\s*stock|available|in-store/i.test((r.availability||'') + ' ' + (r.notes||'')));
   // de-dup by url
   const seen = new Set();
   rows = rows.filter(r => {
@@ -98,7 +105,7 @@ function renderEquivalents(rows,inputPn){
 
 function exportCSV(){
   if (!lastRows.length){ alert('Нет данных'); return; }
-  const cols = ['supplier','part_number','name','price','currency','model','brand','url'];
+  const cols = ['supplier','part_number','name','price','currency','model','brand','url','availability','oem_flag'];
   const header = cols.join(',')+'\n';
   const lines = lastRows.map(r => cols.map(c => csvCell(r[c]||'')).join(',')).join('\n');
   const blob = new Blob([header+lines],{type:'text/csv;charset=utf-8;'});
