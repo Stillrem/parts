@@ -1,1 +1,33 @@
-import { aggregate } from './lib/aggregate.js';export default async function handler(req,res){const q=(req.query&&req.query.q)||'';if(!q)return res.status(400).json({error:'Missing q'});try{const items=await aggregate(q);res.setHeader('Cache-Control','s-maxage=300, stale-while-revalidate=600');return res.status(200).json({items})}catch(e){return res.status(500).json({error:e.message})}}
+// Netlify Functions (Node 18+, ESM)
+import { aggregate } from './lib/aggregate.js';
+
+export async function handler(event, context) {
+  try {
+    const q = (event.queryStringParameters && event.queryStringParameters.q) || '';
+    if (!q) {
+      return {
+        statusCode: 400,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: 'Missing q' }),
+      };
+    }
+
+    const items = await aggregate(q);
+
+    return {
+      statusCode: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 's-maxage=300, stale-while-revalidate=600',
+      },
+      body: JSON.stringify({ items }),
+    };
+  } catch (e) {
+    console.error('[api/search] failed', e);
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: e && e.message ? e.message : String(e) }),
+    };
+  }
+}
