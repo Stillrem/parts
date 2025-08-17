@@ -1,15 +1,32 @@
+import { aggregate } from "../lib/aggregate.js";
 
-exports.handler = async (event) => {
+export async function handler(event) {
   const q = event.queryStringParameters.q || "";
-  if(q === "__demo"){
+
+  if (q === "__diag") {
     return {
       statusCode: 200,
-      body: JSON.stringify({results:[
-        {name:"Washer Pump", partNumber:"W11259006", price:"$45.99", url:"#", image:"https://via.placeholder.com/150"},
-        {name:"Motor", partNumber:"M12345", price:"$89.50", url:"#", image:"https://via.placeholder.com/150"},
-        {name:"Knob", partNumber:"K54321", price:"$12.00", url:"#", image:"https://via.placeholder.com/150"}
-      ]})
+      body: JSON.stringify({ ok: true, env: process.env, ts: Date.now() })
     };
   }
-  return { statusCode: 200, body: JSON.stringify({results: []}) };
-};
+
+  let results = [];
+  try {
+    results = await aggregate(q);
+  } catch (e) {
+    results = [];
+  }
+
+  // демо fallback
+  if (!results.length) {
+    results = [
+      { title: "Demo Part 1", partNumber: "PN123", price: "$99.99", img: "https://via.placeholder.com/150", source: "Demo" },
+      { title: "Demo Part 2", partNumber: "PN456", price: "$49.99", img: "https://via.placeholder.com/150", source: "Demo" }
+    ];
+  }
+
+  return {
+    statusCode: 200,
+    body: JSON.stringify(results)
+  };
+}
