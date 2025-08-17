@@ -62,7 +62,14 @@ function proxyImage(u) {
   if (u.startsWith('/api/img?u=')) return u; // уже проксировано
   let host = '';
   try { host = new URL(u).hostname; } catch { return u; }
-  const ALLOW = new Set(['s.sears.com','www.repairclinic.com','rcappliancepartsimages.com']);
+  const ALLOW = new Set([
+    's.sears.com',
+    'www.repairclinic.com',
+    'rcappliancepartsimages.com',
+    // иногда у Sears попадаются запасные CDN-хосты:
+    'images.searspartsdirect.com',
+    'c.shld.net'
+  ]);
   if (!ALLOW.has(host)) return u;
   return `/api/img?u=${encodeURIComponent(u)}`;
 }
@@ -98,53 +105,19 @@ function findAnyImageFromHtml(html, baseHost) {
   catch { return found; }
 }
 
-// Вытянуть "Previous part numbers" только из одноимённого блока на PDP Sears
-function extractSearsPrevParts(html) {
-  const $ = cheerio.load(html);
-  const result = new Set();
-
-  // ищем заголовок секции
-  const header = $('div.tw-text-2md.tw-font-semibold.tw-mb-2')
-    .filter((_, el) => /Previous part numbers/i.test($(el).text()))
-    .first();
-
-  if (!header.length) return [];
-
-  // после заголовка идут ссылки вида "Part #123456789"
-  // заберём максимум 8 штук, пока не встретили следующий заголовок той же секции
-  let el = header[0].nextSibling;
-  let taken = 0;
-
-  while (el && taken < 8) {
-    const node = $(el);
-
-    // если наткнулись на следующий такой же заголовок/секцию — выходим
-    if (node.is('div.tw-text-2md.tw-font-semibold.tw-mb-2')) break;
-
-    node.find('a').each((_, a) => {
-      const txt = $(a).text();
-      const m = String(txt).match(/Part\s*#\s*(\d{7,})/i);
-      if (m && m[1]) {
-        result.add(m[1]);
-      }
-    });
-
-    el = el.nextSibling;
-    taken++;
+// Из «Previous part numbers» берём только номера из соответствующего блока
+function extractPrevPartNumbersFromSears(html) {
+  const out = new Set();
+  const idx = html.indexOf('Previous part numbers');
+  if (idx < 0) return [];
+  // берём «окно» после заголовка (достаточно 3–6 KB)
+  const slice = html.slice(idx, idx + 6000);
+  const rx = /Part\s*#\s*(\d{7,})/ig;
+  let m;
+  while ((m = rx.exec(slice))) {
+    out.add(m[1]);
   }
-
-  return Array.from(result);
-}
-
-// Безопасное добавление пометки "Part #…" + «Previous: …» к названию карточки
-function augmentTitle(base, pnDigits, prevParts) {
-  let title = base || '';
-  if (pnDigits) title += ` Part #${pnDigits}`;
-  if (prevParts && prevParts.length) {
-    const short = prevParts.slice(0, 6).map(p => `Part #${p}`).join(', ');
-    title += ` • Previous: ${short}`;
-  }
-  return title;
+  return Array.from(out);
 }
 
 /* ---------- main ---------- */
@@ -173,7 +146,7 @@ export async function aggregate(q) {
           part_number: x.part_number || '',
           availability: x.availability || '',
           oem_flag: x.oem_flag || false,
-          prev_parts: []        // добавили поле под предыдущие PN
+          _prevPNs: [] // заполним позже при PDP-догрузке (для Sears)
         });
       }
     } else {
@@ -232,18 +205,21 @@ export async function aggregate(q) {
         });
 
         const host = new URL(it.url).hostname;
-        let img = findAnyImageFromHtml(html, host);
 
-        if (img) {
-          if (host.includes('searspartsdirect.com')) img = normalizeSearsImage(img);
-          if (host.includes('repairclinic.com'))      img = normalizeRCImage(img);
-          it.image = img;
+        // картинка с PDP: используем ТОЛЬКО если у нас её ещё нет
+        if (!it.image) {
+          let img = findAnyImageFromHtml(html, host);
+          if (img) {
+            if (host.includes('searspartsdirect.com')) img = normalizeSearsImage(img);
+            if (host.includes('repairclinic.com'))      img = normalizeRCImage(img);
+            it.image = img;
+          }
         }
 
-        // Sears: вытащим «Previous part numbers» только из одноимённого блока
+        // «Previous part numbers» — только для Sears
         if (host.includes('searspartsdirect.com')) {
-          const prev = extractSearsPrevParts(html);
-          if (prev.length) it.prev_parts = prev;
+          const prev = extractPrevPartNumbersFromSears(html);
+          if (prev.length) it._prevPNs = prev;
         }
       } catch {
         // пропускаем
@@ -251,7 +227,7 @@ export async function aggregate(q) {
     })
   );
 
-  // 2c) Sears: если картинка "построенная из PN" и на CDN её нет — переключаемся на _Illustration
+  // 2c) Sears: если картинка «по PN», но на CDN ее нет — переключаемся на _Illustration
   async function checkSearsAndMaybeIllustration(it) {
     const pn = (String(it.part_number || '').match(/\d{7,}/) || [])[0] || '';
     if (!pn) return;
@@ -277,19 +253,23 @@ export async function aggregate(q) {
     await Promise.allSettled(candidates.map(checkSearsAndMaybeIllustration));
   }
 
-  // 3) Проксируем Sears/RC картинки через /api/img
+  // 3) Добавим в name: "Part #…" + "Previous part numbers: …"
   for (const it of clean) {
-    if (it.image) it.image = proxyImage(it.image);
+    const pn = (String(it.part_number || '').match(/\d{7,}/) || [])[0] || '';
+    const baseTitle = String(it.name || '').replace(/\s+Part\s*#\d{7,}.*/i, '').trim();
+    let suffix = '';
+    if (pn) suffix += ` Part #${pn}`;
+    if (it._prevPNs && it._prevPNs.length) {
+      const list = it._prevPNs.slice(0, 6).map(x => `#${x}`).join(', ');
+      suffix += ` — Previous part numbers: ${list}`;
+    }
+    it.name = (baseTitle + (suffix ? ` ${suffix}` : '')).trim();
+    delete it._prevPNs;
   }
 
-  // 4) Финальный апдейт заголовков: добавляем «Part #…» и «Previous: …» (только свои!)
+  // 4) Проксируем Sears/RC картинки через /api/img
   for (const it of clean) {
-    const pnDigits = (String(it.part_number || '').match(/\d{7,}/) || [])[0] || '';
-    if (it.supplier === 'SearsPartsDirect') {
-      it.name = augmentTitle(it.name, pnDigits, it.prev_parts);
-    } else {
-      it.name = augmentTitle(it.name, pnDigits, []); // для других источников prev_parts не добавляем
-    }
+    if (it.image) it.image = proxyImage(it.image);
   }
 
   return { items: clean, meta };
