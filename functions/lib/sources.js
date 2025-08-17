@@ -34,77 +34,109 @@ function firstNonEmpty(...vals) {
 }
 
 /* ========== public API ========== */
-export const sources = [
-  /* -------- SearsPartsDirect -------- */
-  {
-    name: "SearsPartsDirect",
-    searchUrl: (query) =>
-      `https://www.searspartsdirect.com/search?q=${encodeURIComponent(query)}`,
+// ========== SearsPartsDirect (модель → диаграммы → детали) ==========
+export async function fromSears(q){
+  const BASE = 'https://www.searspartsdirect.com';
+  const searchUrl = `${BASE}/search?q=${encodeURIComponent(q)}`;
 
-    parser: async (html) => {
-      const $ = cheerio.load(html);
-      const results = [];
+  // --- 1) Поиск: карточки товара/детали прямо из выдачи ---
+  const html = await fetchHTML(searchUrl);
+  const $ = cheerio.load(html);
+  const items = [];
 
-      // Карточки деталей/товаров на странице поиска
-      // Подхватываем несколько возможных контейнеров
-      const cards = $(
-        ".part-card, .product-card, .card, [data-component='product-card']"
-      );
+  function pushItem(name, link, $ctx){
+    if(!name || !link) return;
+    const text = ($ctx?.text?.() || '').trim().replace(/\s+/g,' ');
+    const { price, currency } = money(text);
+    const img = pickImg($ctx || $('img'), BASE);
+    items.push({
+      supplier: 'SearsPartsDirect',
+      name,
+      url: link,
+      image: img,
+      price,
+      currency,
+      part_number: pn(name)
+    });
+  }
 
-      cards.each((_, el) => {
-        const el$ = $(el);
+  // Карточки детали/товара
+  $('.card, .product-card, [data-component="product-card"], a[href*="/product/"], a[href*="/part/"]').each((_,el)=>{
+    const el$ = $(el);
+    const a = el$.is('a') ? el$ : el$.find('a[href]').first();
+    let href = (a.attr('href')||'').trim();
+    if(!href) return;
+    if(href.startsWith('/')) href = BASE + href;
+    const name = (el$.text() || a.text()).trim().replace(/\s+/g,' ');
+    pushItem(name, href, el$);
+  });
+  if(items.length) return items;
 
-        // Заголовок
-        const title = firstNonEmpty(
-          el$.find(".card-title").text(),
-          el$.find(".product-title").text(),
-          el$.text()
-        );
+  // --- 2) Если ничего нет: попробовать страницы МОДЕЛЕЙ ---
+  const modelLinks = Array.from(new Set(
+    $('a[href*="/model/"], a[href*="/Model/"]')
+      .map((_,a)=>$(a).attr('href')||'').get()
+      .filter(Boolean)
+  )).slice(0,2);  // не усугубляем нагрузку
 
-        // Ссылка
-        const href = el$.find("a[href]").first().attr("href") || "";
-        if (!href) return;
-        const link = absolutize(href, "https://www.searspartsdirect.com");
+  for (let href of modelLinks){
+    try{
+      if(href.startsWith('/')) href = BASE + href;
+      const mh = await fetchHTML(href);
+      const $$ = cheerio.load(mh);
 
-        // Картинка — БЕРЁМ ИМЕННО src (их CDN), а не data-src
-        let img =
-          el$.find("img").attr("src") ||
-          el$.find("img").attr("data-src") ||
-          el$.find("img").attr("srcset") ||
-          "";
+      // На странице модели часто есть ссылки на диаграммы (sections)
+      const diagramLinks = Array.from(new Set(
+        $$('a[href*="/diagram/"], a[href*="/Diagram/"]')
+          .map((_,a)=> $$(a).attr('href')||'').get()
+          .filter(Boolean)
+      )).slice(0,2);
 
-        img = absolutize(img, "https://www.searspartsdirect.com");
-
-        // Доп. фильтр: оставляем только CDN Sears, если он есть
-        if (/^https?:\/\/s\.sears\.com\/is\/image\/Sears\//i.test(img) === false) {
-          // если попалась не та картинка (декор), попробуем найти правильную среди всех <img> внутри карточки
-          const imgs = el$.find("img");
-          for (let i = 0; i < imgs.length; i++) {
-            const raw =
-              $(imgs[i]).attr("src") ||
-              $(imgs[i]).attr("data-src") ||
-              $(imgs[i]).attr("srcset") ||
-              "";
-            const abs = absolutize(raw, "https://www.searspartsdirect.com");
-            if (/^https?:\/\/s\.sears\.com\/is\/image\/Sears\//i.test(abs)) {
-              img = abs;
-              break;
-            }
-          }
-        }
-
-        // Если картинка всё же не найдена — оставим пусто (фронт покажет плейсхолдер)
-        results.push({
-          title: title.replace(/\s+/g, " ").trim(),
-          link,
-          image: img || null,
-          source: "SearsPartsDirect",
-        });
+      // Собрать детали прямо с модели (иногда уже есть списки частей)
+      $$('a[href*="/part/"], a[href*="/product/"]').each((_,el)=>{
+        const a = $$(el).is('a') ? $$(el) : $$(el).find('a[href]').first();
+        let link = (a.attr('href')||'').trim();
+        if(!link) return;
+        if(link.startsWith('/')) link = BASE + link;
+        const name = $$(el).text().trim().replace(/\s+/g,' ');
+        pushItem(name, link, $$(el));
       });
 
-      return results;
-    },
-  },
+      // --- 3) Пройти по 1–2 диаграммам и вытащить карточки деталей ---
+      for (let dHref of diagramLinks){
+        try{
+          if(dHref.startsWith('/')) dHref = BASE + dHref;
+          const dh = await fetchHTML(dHref);
+          const $$$ = cheerio.load(dh);
+
+          // Часто детали представлены как ссылки на /part/ внутри списков
+          $$$('a[href*="/part/"], a[href*="/product/"]').each((_,el)=>{
+            const a = $$$(el).is('a') ? $$$(el) : $$$(el).find('a[href]').first();
+            let link = (a.attr('href')||'').trim();
+            if(!link) return;
+            if(link.startsWith('/')) link = BASE + link;
+            const name = $$$(el).text().trim().replace(/\s+/g,' ');
+            pushItem(name, link, $$$(el));
+          });
+
+          // Иногда на диаграмме есть карточки со структурой похожей на product-card
+          $$$('.card, .product-card, [data-component="product-card"]').each((_,el)=>{
+            const el$ = $$$(el);
+            const a = el$.is('a') ? el$ : el$.find('a[href]').first();
+            let link = (a.attr('href')||'').trim();
+            if(!link) return;
+            if(link.startsWith('/')) link = BASE + link;
+            const name = (el$.text() || a.text()).trim().replace(/\s+/g,' ');
+            pushItem(name, link, el$);
+          });
+
+        }catch(e){ /* диаграмма не критична, идём дальше */ }
+      }
+    }catch(e){ /* модель не критична, идём дальше */ }
+  }
+
+  return items;
+}
 
   /* -------- RepairClinic -------- */
   {
