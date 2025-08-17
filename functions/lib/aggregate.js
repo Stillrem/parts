@@ -5,6 +5,7 @@ import * as cheerio from 'cheerio';
 
 /* ---------- helpers ---------- */
 
+// JPEG для Sears по PN (Scene7/Adobe)
 function searsImageFromPN(
   pn,
   { wid = 285, hei = 200, qlt = 90, sharpen = 2 } = {}
@@ -14,6 +15,7 @@ function searsImageFromPN(
   return `https://s.sears.com/is/image/Sears/PD_0022_628_${pn}?wid=${wid}&hei=${hei}&fmt=pjpg&qlt=${qlt}&op_sharpen=${sharpen}`;
 }
 
+// Иллюстрация Sears по PN (когда основного фото нет)
 function searsIllustrationFromPN(
   pn,
   { wid = 285, hei = 200, qlt = 90, sharpen = 2 } = {}
@@ -23,6 +25,7 @@ function searsIllustrationFromPN(
   return `https://s.sears.com/is/image/Sears/PD_0022_628_${pn}_Illustration?wid=${wid}&hei=${hei}&fmt=pjpg&qlt=${qlt}&op_sharpen=${sharpen}`;
 }
 
+// Если og:image у Sears без параметров — добавим тип/размер
 function normalizeSearsImage(u) {
   try {
     const url = new URL(u);
@@ -45,14 +48,16 @@ function normalizeSearsImage(u) {
   } catch { return u; }
 }
 
+// Нормализация картинок RepairClinic (относительные → абсолютные)
 function normalizeRCImage(u) {
   try { return new URL(u, 'https://www.repairclinic.com').toString(); }
   catch { return u; }
 }
 
+// Прокси изображений через свой домен
 function proxyImage(u) {
   if (!u) return '';
-  if (u.startsWith('/api/img?u=')) return u;
+  if (u.startsWith('/api/img?u=')) return u; // уже проксировано
   let host = '';
   try { host = new URL(u).hostname; } catch { return u; }
   const ALLOW = new Set(['s.sears.com','www.repairclinic.com','rcappliancepartsimages.com']);
@@ -60,8 +65,17 @@ function proxyImage(u) {
   return `/api/img?u=${encodeURIComponent(u)}`;
 }
 
+// «Наша» PN-картинка (чтобы понять, что нужно перепроверить на PDP/HEAD)
 const BUILT_SEARS_PN_IMG = /https?:\/\/s\.sears\.com\/is\/image\/Sears\/PD_0022_628_\d+\b/i;
 
+/* точечные соответствия: картинка на CDN под другим PN */
+const SEARS_IMG_PN_REDIRECT = {
+  '5304509475': '5304464094', // Thermal Cut-off
+  '5304509458': '5304464097', // Door Interlock Switch Lever
+  '5304509459': '5304464098'  // Door Interlock Switch
+};
+
+// Универсальный поиск картинки в HTML
 function findAnyImageFromHtml(html, baseHost) {
   const $ = cheerio.load(html);
   let found = $('meta[property="og:image"],meta[name="og:image"]').attr('content') || '';
@@ -86,36 +100,49 @@ function findAnyImageFromHtml(html, baseHost) {
   catch { return found; }
 }
 
-function extractPrevPNsFromHtml(html, currentPN='') {
-  const prev = new Set();
-  const rxBlocks = [
-    /Replaces[^<>\n]*?(\d{7,}([,\s/]|$))/gi,
-    /Substitutes[^<>\n]*?(\d{7,}([,\s/]|$))/gi,
-    /Substitution[^<>\n]*?(\d{7,}([,\s/]|$))/gi,
-    /Previous[^<>\n]*?(\d{7,}([,\s/]|$))/gi,
-    /Part\s+replaces[^<>\n]*?(\d{7,}([,\s/]|$))/gi
-  ];
-  for (const rx of rxBlocks) {
+/* ====== КОРРЕКТНОЕ ВЫТАСКИВАНИЕ Previous part numbers ТОЛЬКО ИЗ СЕКЦИИ ====== */
+function extractPrevPNsFromSearsPDP(html, currentPN='') {
+  const $ = cheerio.load(html);
+
+  // 1) найти узел, который содержит заголовок "Previous part numbers"
+  let $section = null;
+  $('*').each((_, el) => {
+    const txt = $(el).text().trim();
+    if (/^previous\s+part\s+numbers$/i.test(txt)) {
+      // берём ближайший контейнер секции
+      $section = $(el).closest('section,div');
+      return false;
+    }
+    return undefined;
+  });
+
+  // 2) если нашли — соберём PN только внутри этой секции
+  const set = new Set();
+  const rxPN = /\b(530\d{7})\b/g;
+
+  if ($section && $section.length) {
+    const txt = $section.text();
     let m;
-    while ((m = rx.exec(html))) {
-      const nums = String(m[0]).match(/\d{7,}/g) || [];
-      nums.forEach(n => prev.add(n));
+    while ((m = rxPN.exec(txt))) set.add(m[1]);
+  } else {
+    // 3) fallback по «окну» между заголовком и следующей секцией,
+    // чтобы не залезть в «Customers also bought» и т.д.
+    const body = String(html);
+    const start = body.search(/Previous\s+part\s+numbers/i);
+    if (start !== -1) {
+      // до ближайшего следующего заголовка/секции
+      const tail = body.slice(start, start + 5000);
+      const stop = tail.search(/(This\s+Part\s+Also\s+Fits|Customers\s+also|You\s+Might\s+Also|<h\d|<\/section>|<\/div>)/i);
+      const windowText = tail.slice(0, stop > 0 ? stop : 2000);
+      let m;
+      while ((m = rxPN.exec(windowText))) set.add(m[1]);
     }
   }
-  const near = /(?:part|replac|substitut|previous)[^]{0,120}?(\d{7,})/gi;
-  let m2;
-  while ((m2 = near.exec(html))) prev.add(m2[1]);
 
-  if (currentPN) prev.delete(String(currentPN));
-  return Array.from(prev).slice(0, 10);
+  if (currentPN) set.delete(String(currentPN));
+  // максимум 6
+  return Array.from(set).slice(0, 6);
 }
-
-/* картинка на CDN под другим PN (точечно) */
-const SEARS_IMG_PN_REDIRECT = {
-  '5304509475': '5304464094', // Thermal Cut-off
-  '5304509458': '5304464097', // Door Interlock Switch Lever
-  '5304509459': '5304464098'  // Door Interlock Switch
-};
 
 /* ---------- main ---------- */
 
@@ -167,16 +194,16 @@ export async function aggregate(q) {
   for (const it of clean) {
     if (it.supplier !== 'SearsPartsDirect') continue;
     const pnMatch = String(it.part_number || '').match(/\d{7,}/);
-    const pn = pnMatch ? pnMatch[0] : '';
+    const pnRaw = pnMatch ? pnMatch[0] : '';
+    const pn = SEARS_IMG_PN_REDIRECT[pnRaw] || pnRaw;
     const missing = !it.image;
     const bad = it.image && BAD_SEARS_IMG.test(it.image);
     if (pn && (missing || bad)) {
-      const imgPN = SEARS_IMG_PN_REDIRECT[pn] || pn;
-      it.image = searsImageFromPN(imgPN);
+      it.image = searsImageFromPN(pn);
     }
   }
 
-  /* ---------- PDP fetch: теперь ещё и для получения Previous PN ---------- */
+  /* ---------- PDP fetch: для картинок И/ИЛИ Previous PN ---------- */
   const toFetchPDP = [];
   const MAX_PDP = 16;
 
@@ -186,11 +213,10 @@ export async function aggregate(q) {
     const isRC    = it.supplier === 'RepairClinic';
 
     const needsImage =
-      isSears && (!it.image || BUILT_SEARS_PN_IMG.test(String(it.image))) ||
+      (isSears && (!it.image || BUILT_SEARS_PN_IMG.test(String(it.image)))) ||
       (isRC && !it.image);
 
-    const needsPrev =
-      isSears && (!it.prev_part_numbers || it.prev_part_numbers.length === 0);
+    const needsPrev = isSears && (!it.prev_part_numbers || it.prev_part_numbers.length === 0);
 
     if (needsImage || needsPrev) {
       toFetchPDP.push(it);
@@ -224,17 +250,19 @@ export async function aggregate(q) {
           }
         }
 
-        // всегда пытаемся вытащить Previous PN
-        const currentPN = (String(it.part_number||'').match(/\d{7,}/)||[])[0] || '';
-        const prev = extractPrevPNsFromHtml(html, currentPN);
-        if (prev.length) {
-          it.prev_part_numbers = Array.from(new Set([...(it.prev_part_numbers||[]), ...prev]));
+        // строго: Previous part numbers — только из соответствующей секции
+        if (host.includes('searspartsdirect.com')) {
+          const currentPN = (String(it.part_number||'').match(/\d{7,}/)||[])[0] || '';
+          const prev = extractPrevPNsFromSearsPDP(html, currentPN);
+          if (prev.length) {
+            it.prev_part_numbers = Array.from(new Set([...(it.prev_part_numbers||[]), ...prev]));
+          }
         }
       } catch { /* skip */ }
     })
   );
 
-  // HEAD-проверка для "построенных" картинок, иллюстрация если нет основного фото
+  // HEAD-проверка «построенных» картинок + фоллбек-иллюстрация
   async function checkSearsAndMaybeIllustration(it) {
     const rawPN = (String(it.part_number || '').match(/\d{7,}/) || [])[0] || '';
     const pn = SEARS_IMG_PN_REDIRECT[rawPN] || rawPN;
@@ -276,7 +304,11 @@ export async function aggregate(q) {
     if (currentPN) lines.push(`Part #${currentPN}`);
 
     if (it.prev_part_numbers && it.prev_part_numbers.length) {
-      const prev = Array.from(new Set(it.prev_part_numbers.filter(p => String(p) !== String(currentPN))));
+      const prev = Array.from(new Set(
+        it.prev_part_numbers
+          .map(p => String(p))
+          .filter(p => p !== String(currentPN) && /^530\d{7}$/.test(p))
+      ));
       if (prev.length) {
         lines.push('Previous part numbers');
         prev.forEach(p => lines.push(`Part #${p}`));
