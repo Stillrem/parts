@@ -172,7 +172,7 @@ export const sources = [
         const title = first(el$.find('.card-title').text(), el$.find('.product-title').text(), el$.text());
         const link = absUrl(href, BASE_SEARS);
         const image = pickSearsThumb(el$);
-        const part_number = pnText(title) || pnFromLink(link);
+        const part_number = pnFromLink(link) || pnText(title);
 
         out.push({
           title: t(title),
