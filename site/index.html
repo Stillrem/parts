@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Parts Hub — Единая база по сайтам</title><link rel="stylesheet" href="styles.css"/></head>
+<body>
+<header class="wrap"><h1>Parts Hub</h1>
+<p>Поиск по нескольким магазинам запчастей (SearsPartsDirect, RepairClinic, AppliancePartsPros, PartSelect, eBay*, Amazon*).</p>
+<form id="searchForm" class="search"><input id="q" placeholder="MVWB835DW5 или W11259006"/><button>Искать</button></form>
+<div class="filters"><select id="supplier"><option value="">Все</option><option>SearsPartsDirect</option><option>RepairClinic</option><option>AppliancePartsPros</option><option>PartSelect</option><option>eBay</option><option>Amazon</option></select>
+<label><input type="checkbox" id="onlyInStock"/> Только In Stock</label><label><input type="checkbox" id="onlyOEM"/> Только OEM</label><button id="exportBtn" type="button">Экспорт CSV</button></div>
+</header>
+<main class="wrap"><section id="equivBox" class="hidden"><h2>Взаимозаменяемые номера</h2><div id="equivList"></div></section><section id="resultsGrid" class="grid"></section></main>
+<template id="cardTmpl"><article class="card"><figure class="thumb"><img alt="preview"/></figure><div class="card-body">
+<h3 class="title"></h3><div class="meta"></div><div class="price"></div><div class="compat"></div><div class="links"></div><div class="chips"></div></div></article></template>
+<footer class="wrap"><small>* eBay/Amazon через официальные API (переменные окружения на хостинге).</small></footer>
+<script src="app.js"></script></body></html>
