@@ -1,82 +1,5 @@
-
 import { sources } from './sources.js';
 import httpGet from './http_get.js';
-
-
-function absolutizeUrl(src, base){
-  if (!src) return '';
-  src = String(src).trim();
-  if (!src) return '';
-  if (src.startsWith('//')) return 'https:'+src;
-  if (/^https?:\/\//i.test(src)) return src;
-  if (src.startsWith('/')) return base.replace(/\/$/,'') + src;
-  return src;
-}
-
-async function enrichImages(items, maxFetch = 8)
-async function enrichImages(items, maxFetch = 8){
-  const cheerioMod = await import('cheerio');
-  const $load = cheerioMod.load;
-  let fetched = 0;
-
-  function hostOf(u){ try { return new URL(u).hostname; } catch { return ''; } }
-  function absolutizeUrl(src, base){
-    if (!src) return '';
-    src = String(src).trim();
-    if (!src) return '';
-    if (src.startsWith('//')) return 'https:'+src;
-    if (/^https?:\/\//i.test(src)) return src;
-    if (src.startsWith('/')) return base.replace(/\/$/,'') + src;
-    return src;
-  }
-
-  for (const it of items){
-    if (fetched >= maxFetch) break;
-    if (it.image || !it.url) continue;
-
-    const host = hostOf(it.url);
-    const base = it.url.split('/').slice(0,3).join('/');
-
-    try{
-      const html = await httpGet(it.url, { 'Referer': base + '/' });
-      const $ = $load(html);
-
-      if (/searspartsdirect\\.com$/i.test(host)){
-        // Sears: берём только CDN-картинки, предпочтительно из карточек деталей
-        let found = '';
-        // 1) в блоках с ссылками на детали
-        $('a[href*="/part/"], a[href*="/product/"]').each((_,a)=>{
-          if (found) return;
-          const box = $(a).closest('.part-card, .product-card, .card, [data-component="product-card"]');
-          const raw = (box.find('img').attr('src') || box.find('img').attr('srcset') || '').trim();
-          const abs = absolutizeUrl(raw, base);
-          if (/^https?:\/\/s\.sears\.com\/is\/image\/Sears\//i.test(abs)) found = abs;
-        });
-        // 2) любой img на странице с CDN Sears
-        if (!found){
-          $('img').each((_,img)=>{
-            if (found) return;
-            const raw = $(img).attr('src') || $(img).attr('srcset') || '';
-            const abs = absolutizeUrl(raw, base);
-            if (/^https?:\/\/s\.sears\.com\/is\/image\/Sears\//i.test(abs)) found = abs;
-          });
-        }
-        if (found){ it.image = found; fetched++; }
-        // Не используем og:image у Sears — часто не то
-        continue;
-      }
-
-      // Другие домены: пробуем og:image
-      const og = $('meta[property="og:image"]').attr('content') || '';
-      const img = og || $('img').first().attr('src') || '';
-      const abs = absolutizeUrl(img, base);
-      if (abs){ it.image = abs; fetched++; }
-    }catch{
-      // ignore errors per item
-    }
-  }
-  return items;
-}
 
 export async function aggregate(q){
   const started = Date.now();
@@ -91,6 +14,7 @@ export async function aggregate(q){
     if (r.status === 'fulfilled'){
       const arr = Array.isArray(r.value) ? r.value : [];
       meta.sources.push({ name, ok:true, count:arr.length });
+      // normalize поля
       arr.forEach(x => items.push({
         supplier: name,
         name: x.title || x.name || '',
@@ -108,17 +32,15 @@ export async function aggregate(q){
     }
   }
 
-  // de-dup by url
+  // де-дуп по URL
   const seen = new Set();
   const clean = items.filter(it => {
     if (!it.url) return false;
-    const k = it.url;
-    if (seen.has(k)) return false;
-    seen.add(k);
+    if (seen.has(it.url)) return false;
+    seen.add(it.url);
     return true;
   });
 
-  await enrichImages(clean, 10);
   return { items: clean, meta };
 }
 
