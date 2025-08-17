@@ -1,8 +1,7 @@
 // functions/lib/sources.js
 import * as cheerio from 'cheerio';
 
-/* ===== базовые утилиты (внутренние; другие файлы их не используют) ===== */
-
+/* ===== утилиты ===== */
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123 Safari/537.36';
 
@@ -24,11 +23,11 @@ function pn(s = '') {
   return m ? m[0].toUpperCase() : '';
 }
 
-// разворачиваем Next.js-оптимизатор: /_next/image?url=<ENCODED>&w=...&q=...
+// Разворачиваем RC: /_next/image?url=<ENCODED>&w=...
 function unwrapNextImage(src) {
   if (!src) return '';
   try {
-    const u = new URL(src, 'https://dummy.base'); // чтобы парсить относительный /_next/image
+    const u = new URL(src, 'https://dummy.base');
     if (u.pathname.includes('/_next/image') && u.searchParams.has('url')) {
       const original = u.searchParams.get('url');
       return decodeURIComponent(original || '');
@@ -41,17 +40,12 @@ function absolutize(src, base) {
   if (!src) return '';
   src = String(src).trim();
   if (!src) return '';
-  // сперва разворачиваем /_next/image
+  // сперва разворачиваем /_next/image (RepairClinic)
   src = unwrapNextImage(src);
   if (src.startsWith('//')) return 'https:' + src;
   if (/^https?:\/\//i.test(src)) return src;
   if (src.startsWith('/')) {
-    try {
-      const u = new URL(base);
-      return u.origin + src;
-    } catch {
-      return src;
-    }
+    try { const u = new URL(base); return u.origin + src; } catch { return src; }
   }
   // если это srcset: берем первый URL
   if (/\s+\d+x(?:,|$)/.test(src)) {
@@ -66,16 +60,16 @@ function firstNonEmpty(...vals) {
   return '';
 }
 
-/* Sears: брать product-thumb с CDN s.sears.com; если нет — обычный src */
+/* Sears: брать product-thumb только с CDN s.sears.com */
 function pickSearsThumb($ctx) {
   const BASE = 'https://www.searspartsdirect.com';
 
-  // 1) пробуем прямой src первого <img>
+  // 1) прямой src первого <img>
   let img = $ctx.find('img').attr('src') || '';
   img = absolutize(img, BASE);
   if (/^https?:\/\/s\.sears\.com\/is\/image\/Sears\//i.test(img)) return img;
 
-  // 2) ищем любую <img> с CDN Sears внутри карточки
+  // 2) ищем любой <img> внутри карточки с CDN Sears
   $ctx.find('img').each((_, el) => {
     const raw =
       el.attribs?.src ||
@@ -91,9 +85,9 @@ function pickSearsThumb($ctx) {
   return img || '';
 }
 
-/* ===== источники ===== */
+/* ===== Источники ===== */
 
-/** RepairClinic: плитки + корректные картинки (разворачиваем /_next/image) */
+/** RepairClinic: плитки + корректные картинки (разворачиваем /_next/image → оригинал) */
 export async function fromRepairClinic(q) {
   const BASE = 'https://www.repairclinic.com';
   const url = `${BASE}/Shop-For-Parts?query=${encodeURIComponent(q)}`;
@@ -126,7 +120,7 @@ export async function fromRepairClinic(q) {
         el$.text()
       ).replace(/\s+/g, ' ').trim();
 
-      // IMG: data-* / srcset / src → разворачиваем /_next/image → абсолютный URL
+      // IMG: data-* / srcset / src → unwrapNextImage → absolutize
       let imgRaw =
         el$.find('img').attr('data-src') ||
         el$.find('img').attr('data-original') ||
@@ -147,17 +141,16 @@ export async function fromRepairClinic(q) {
       });
     });
 
-    // если плитки есть — возвращаем их; если нет — упадём в фолбэк ниже
     if (items.length) return items.slice(0, 80);
   } catch {
-    /* если анти-бот — пойдём в фолбэк */
+    // если анти-бот — упадём в фолбэк ниже
   }
 
-  // Фолбэк (анти-бот): всегда отдаём кликабельную ссылку на поиск
+  // Фолбэк (анти-бот): отдаём кликабельную ссылку на поиск
   return [{
     supplier: 'RepairClinic',
     name: `Открыть поиск на RepairClinic для: ${q}`,
-    url: url,
+    url,
     image: '',
     price: '',
     currency: '',
@@ -165,7 +158,7 @@ export async function fromRepairClinic(q) {
   }];
 }
 
-/** SearsPartsDirect: детали/товары + корректные миниатюры с s.sears.com; по моделям — Shop parts */
+/** SearsPartsDirect: детали/товары + правильные миниатюры с s.sears.com; по моделям — Shop parts */
 export async function fromSears(q) {
   const BASE = 'https://www.searspartsdirect.com';
   const url  = `${BASE}/search?q=${encodeURIComponent(q)}`;
@@ -174,13 +167,12 @@ export async function fromSears(q) {
   const $ = cheerio.load(html);
   const items = [];
 
-  // 1) Детали/товары прямо со страницы поиска
+  // 1) Детали/товары со страницы поиска
   $('.part-card, .product-card, .card, [data-component="product-card"], a[href*="/part/"], a[href*="/product/"]').each((_, el) => {
     const el$ = $(el);
     const a$  = el$.is('a') ? el$ : el$.find('a[href]').first();
     let href  = (a$.attr('href') || '').trim();
     if (!/\/part\/|\/product\//i.test(href || '')) return;
-
     if (href.startsWith('/')) href = BASE + href;
 
     const name = firstNonEmpty(
@@ -189,7 +181,7 @@ export async function fromSears(q) {
       el$.text()
     ).replace(/\s+/g, ' ').trim();
 
-    const image = pickSearsThumb(el$); // берём именно CDN Sears
+    const image = pickSearsThumb(el$); // только CDN Sears
 
     items.push({
       supplier: 'SearsPartsDirect',
