@@ -1,14 +1,15 @@
 import * as cheerio from 'cheerio';
 import httpGet from './http_get.js';
 
-/* ===== helpers ===== */
+import * as cheerio from 'cheerio';
+
+/* helpers */
 const BASE_SEARS = 'https://www.searspartsdirect.com';
-const BASE_RC    = 'https://www.repairclinic.com';
 const t = (s)=>String(s||'').replace(/\s+/g,' ').trim();
 const first = (...vals)=>{ for(const v of vals){ const x=t(v); if(x) return x; } return ''; };
-const pn = (s)=>{ const m=String(s).match(/[A-Z0-9\-]{5,}/i); return m?m[0].toUpperCase():''; };
-const isSearsCDN = (u)=>/^https?:\/\/s\.sears\.com\/is\/image\/Sears\//i.test(String(u||''));
-const detectOEM = (s)=>/\b(OEM|Genuine|Factory|Original)\b/i.test(s||'');
+const pnText = (s)=>{ const m=String(s).match(/[A-Z0-9\-]{5,}/i); return m?m[0].toUpperCase():''; };
+// ВЫТЯГИВАЕМ PN из ссылки Sears: .../id-5304509451
+const pnFromLink = (url)=>{ const m=String(url||'').match(/(?:^|[^\d])(\d{7,})\b/); return m?m[1].toUpperCase():''; };
 
 function unwrapNext(src){
   if(!src) return '';
@@ -29,6 +30,30 @@ function absUrl(src, base){
   if (src.startsWith('/')) return base.replace(/\/$/,'') + src;
   if (/\s+\d+x(?:,|$)/.test(src)) { const u0 = src.split(',')[0].trim().split(' ')[0].trim(); return absUrl(u0, base); }
   return src;
+}
+const isSearsCDN = (u)=>/^https?:\/\/s\.sears\.com\/is\/image\/Sears\//i.test(String(u||''));
+
+function pickSearsThumb($ctx){
+  let img = absUrl($ctx.find('img').attr('src')||'', BASE_SEARS)
+        || absUrl($ctx.find('img').attr('data-src')||'', BASE_SEARS);
+  if (!isSearsCDN(img)){
+    const srcset = $ctx.find('img').attr('srcset') || $ctx.find('img').attr('data-srcset') || '';
+    if (srcset) img = absUrl(srcset, BASE_SEARS);
+  }
+  if (!isSearsCDN(img)){
+    $ctx.find('picture source').each((_,s)=>{
+      const ss = absUrl(s.attribs?.srcset||'', BASE_SEARS);
+      if (isSearsCDN(ss)) { img = ss; return false; }
+    });
+  }
+  if (!isSearsCDN(img)){
+    $ctx.find('img').each((_,el)=>{
+      const raw = el.attribs?.src || el.attribs?.['data-src'] || el.attribs?.srcset || el.attribs?.['data-srcset'] || '';
+      const abs = absUrl(raw, BASE_SEARS);
+      if (isSearsCDN(abs)) { img = abs; return false; }
+    });
+  }
+  return isSearsCDN(img) ? img : '';
 }
 
 /* Sears: достать превью из всех возможных мест карточки */
