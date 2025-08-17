@@ -1,0 +1,2 @@
+import { aggregate } from '../lib/aggregate.js';
+export async function handler(event){const q=(event.queryStringParameters&&event.queryStringParameters.q)||'';if(!q)return{statusCode:400,body:JSON.stringify({error:'Missing q'})};try{const items=await aggregate(q);return{statusCode:200,headers:{'content-type':'application/json'},body:JSON.stringify({items})}}catch(e){return{statusCode:500,body:JSON.stringify({error:e.message})}}}
