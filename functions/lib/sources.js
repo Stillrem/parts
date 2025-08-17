@@ -52,106 +52,36 @@ export async function fromRepairClinic(q){
   return items;
 }
 
-// ========== SearsPartsDirect (модель → диаграммы → детали) ==========
+// SearsPartsDirect — search page
 export async function fromSears(q){
-  const BASE = 'https://www.searspartsdirect.com';
-  const searchUrl = `${BASE}/search?q=${encodeURIComponent(q)}`;
-
-  // --- 1) Поиск: карточки товара/детали прямо из выдачи ---
-  const html = await fetchHTML(searchUrl);
+  const url = `https://www.searspartsdirect.com/search?q=${encodeURIComponent(q)}`;
+  const html = await fetchHTML(url);
   const $ = cheerio.load(html);
   const items = [];
-
-  function pushItem(name, link, $ctx){
-    if(!name || !link) return;
-    const text = ($ctx?.text?.() || '').trim().replace(/\s+/g,' ');
-    const { price, currency } = money(text);
-    const img = pickImg($ctx || $('img'), BASE);
-    items.push({
-      supplier: 'SearsPartsDirect',
-      name,
-      url: link,
-      image: img,
-      price,
-      currency,
-      part_number: pn(name)
-    });
-  }
-
-  // Карточки детали/товара
+  // Common patterns: product cards and anchors to product/part pages
   $('.card, .product-card, [data-component="product-card"], a[href*="/product/"], a[href*="/part/"]').each((_,el)=>{
     const el$ = $(el);
-    const a = el$.is('a') ? el$ : el$.find('a[href]').first();
-    let href = (a.attr('href')||'').trim();
-    if(!href) return;
-    if(href.startsWith('/')) href = BASE + href;
-    const name = (el$.text() || a.text()).trim().replace(/\s+/g,' ');
-    pushItem(name, href, el$);
+    const text = el$.text().trim().replace(/\s+/g,' ');
+    // Prefer inner link
+    let a = el$.is('a') ? el$ : el$.find('a[href]').first();
+    let link = (a.attr('href')||'').trim();
+    if (!link) return;
+    if (link.startsWith('/')) link = 'https://www.searspartsdirect.com'+link;
+    const { price, currency } = money(text);
+    const img = el$.find('img').attr('src')||'';
+    const name = text || a.text().trim();
+    if (name && link) items.push({ supplier:'SearsPartsDirect', name, url:link, image:img, price, currency, part_number:pn(name) });
   });
-  if(items.length) return items;
-
-  // --- 2) Если ничего нет: попробовать страницы МОДЕЛЕЙ ---
-  const modelLinks = Array.from(new Set(
-    $('a[href*="/model/"], a[href*="/Model/"]')
-      .map((_,a)=>$(a).attr('href')||'').get()
-      .filter(Boolean)
-  )).slice(0,2);  // не усугубляем нагрузку
-
-  for (let href of modelLinks){
-    try{
-      if(href.startsWith('/')) href = BASE + href;
-      const mh = await fetchHTML(href);
-      const $$ = cheerio.load(mh);
-
-      // На странице модели часто есть ссылки на диаграммы (sections)
-      const diagramLinks = Array.from(new Set(
-        $$('a[href*="/diagram/"], a[href*="/Diagram/"]')
-          .map((_,a)=> $$(a).attr('href')||'').get()
-          .filter(Boolean)
-      )).slice(0,2);
-
-      // Собрать детали прямо с модели (иногда уже есть списки частей)
-      $$('a[href*="/part/"], a[href*="/product/"]').each((_,el)=>{
-        const a = $$(el).is('a') ? $$(el) : $$(el).find('a[href]').first();
-        let link = (a.attr('href')||'').trim();
-        if(!link) return;
-        if(link.startsWith('/')) link = BASE + link;
-        const name = $$(el).text().trim().replace(/\s+/g,' ');
-        pushItem(name, link, $$(el));
-      });
-
-      // --- 3) Пройти по 1–2 диаграммам и вытащить карточки деталей ---
-      for (let dHref of diagramLinks){
-        try{
-          if(dHref.startsWith('/')) dHref = BASE + dHref;
-          const dh = await fetchHTML(dHref);
-          const $$$ = cheerio.load(dh);
-
-          // Часто детали представлены как ссылки на /part/ внутри списков
-          $$$('a[href*="/part/"], a[href*="/product/"]').each((_,el)=>{
-            const a = $$$(el).is('a') ? $$$(el) : $$$(el).find('a[href]').first();
-            let link = (a.attr('href')||'').trim();
-            if(!link) return;
-            if(link.startsWith('/')) link = BASE + link;
-            const name = $$$(el).text().trim().replace(/\s+/g,' ');
-            pushItem(name, link, $$$(el));
-          });
-
-          // Иногда на диаграмме есть карточки со структурой похожей на product-card
-          $$$('.card, .product-card, [data-component="product-card"]').each((_,el)=>{
-            const el$ = $$$(el);
-            const a = el$.is('a') ? el$ : el$.find('a[href]').first();
-            let link = (a.attr('href')||'').trim();
-            if(!link) return;
-            if(link.startsWith('/')) link = BASE + link;
-            const name = (el$.text() || a.text()).trim().replace(/\s+/g,' ');
-            pushItem(name, link, el$);
-          });
-
-        }catch(e){ /* диаграмма не критична, идём дальше */ }
-      }
-    }catch(e){ /* модель не критична, идём дальше */ }
+  // Fallback: PDP
+  if (!items.length){
+    const title = ($('h1').first().text()||'').trim();
+    if (title){
+      const priceText = ($('[data-qa="price"], .price').first().text()||'').trim();
+      const { price, currency } = money(priceText);
+      const canonical = $('link[rel="canonical"]').attr('href') || url;
+      const img = $('meta[property="og:image"]').attr('content') || $('img').first().attr('src') || '';
+      items.push({ supplier:'SearsPartsDirect', name:title, url:canonical, image:img, price, currency, part_number:pn(title) });
+    }
   }
-
   return items;
 }
