@@ -27,7 +27,7 @@ export async function aggregate(query){
   const results = await Promise.all([
     timed('RepairClinic', () => fromRepairClinic(query)),
     timed('AppliancePartsPros', () => fromAppliancePartsPros(query)),
-    timed('PartSelect', () => fromPartSelect(query)),
+    //timed('PartSelect', () => fromPartSelect(query)),
     timed('SearsPartsDirect', () => fromSears(query)),
   ]);
 
