@@ -21,6 +21,40 @@ function pn(s=''){
   return m?m[0].toUpperCase():'';
 }
 
+
+function absolutize(src, base){
+  if(!src) return '';
+  src = String(src).trim();
+  if(!src) return '';
+  if (src.startsWith('//')) return 'https:' + src;
+  if (/^https?:\/\//i.test(src)) return src;
+  if (src.startsWith('/')) {
+    try {
+      const u = new URL(base);
+      return u.origin + src;
+    } catch { return src; }
+  }
+  if (/\s+\d+x(?:,|$)/.test(src)) {
+    const first = src.split(',')[0].trim().split(' ')[0].trim();
+    return absolutize(first, base);
+  }
+  return src;
+}
+
+function pickImg($root, base){
+  const el = $root.is('img') ? $root : $root.find('img').first();
+  if(el && el.length){
+    const cand = el.attr('data-src') || el.attr('data-original') || el.attr('data-srcset') || el.attr('srcset') || el.attr('src');
+    const abs = absolutize(cand, base);
+    if (abs) return abs;
+  }
+  const style = ($root.attr('style') || '') + ' ' + ($root.find('[style]').first().attr('style') || '');
+  const m = style.match(/url\((['"]?)(.+?)\1\)/i);
+  if (m && m[2]) return absolutize(m[2], base);
+  return '';
+}
+
+
 function pickImg($root){
   // Try common attributes for lazy images
   const el = $root.is('img') ? $root : $root.find('img').first();
@@ -43,7 +77,7 @@ export async function fromRepairClinic(q){
     if(link && link.startsWith('/')) link = 'https://www.repairclinic.com'+link;
     const priceText = $(el).find('.price, [data-qa="product-price"]').first().text();
     const { price, currency } = money(priceText);
-    const img = pickImg($(el));
+    const img = pickImg($(el), 'https://www.repairclinic.com');
     if (name && link) items.push({ supplier:'RepairClinic', name, url:link, image:img, price, currency, part_number:pn(name) });
   });
 
@@ -65,7 +99,7 @@ export async function fromRepairClinic(q){
         if(!link) return;
         if(link.startsWith('/')) link = 'https://www.repairclinic.com'+link;
         const name = $$(el).text().trim().replace(/\s+/g,' ');
-        const img = pickImg($$(el));
+        const img = pickImg($$(el), 'https://www.repairclinic.com');
         if (name && link) items.push({ supplier:'RepairClinic', name, url:link, image:img, part_number:pn(name) });
       });
     }catch{ /* ignore model fetch errors */ }
@@ -101,7 +135,7 @@ export async function fromSears(q){
     if (link.startsWith('/')) link = 'https://www.searspartsdirect.com'+link;
     const text = el$.text().trim().replace(/\s+/g,' ');
     const { price, currency } = money(text);
-    const img = pickImg(el$);
+    const img = pickImg(el$, 'https://www.searspartsdirect.com');
     const name = text || a.text().trim();
     if (name && link) items.push({ supplier:'SearsPartsDirect', name, url:link, image:img, price, currency, part_number:pn(name) });
   });
@@ -121,7 +155,7 @@ export async function fromSears(q){
         if(!link) return;
         if(link.startsWith('/')) link = 'https://www.searspartsdirect.com'+link;
         const name = $$(el).text().trim().replace(/\s+/g,' ');
-        const img = pickImg($$(el));
+        const img = pickImg($$(el), 'https://www.repairclinic.com');
         if (name && link) items.push({ supplier:'SearsPartsDirect', name, url:link, image:img, part_number:pn(name) });
       });
     }catch{ /* ignore model fetch errors */ }
