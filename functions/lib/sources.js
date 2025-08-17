@@ -22,7 +22,7 @@ function pn(s=''){
 }
 
 export async function fromRepairClinic(q){
-  const url = `https://www.repairclinic.com/Search?query=${encodeURIComponent(q)}`;
+  const url = `https://www.repairclinic.com/Shop-For-Parts?query=${encodeURIComponent(q)}`;
   const html = await fetchHTML(url);
   const $ = cheerio.load(html);
   const items = [];
