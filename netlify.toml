@@ -1,6 +1,11 @@
 [build]
   publish = "site"
   functions = "functions"
+
+[functions]
+  node_bundler = "esbuild"
+  node_version = "18"
+
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
