@@ -2,6 +2,35 @@
 import { sources } from './sources.js';
 import httpGet from './http_get.js';
 
+
+function absolutizeUrl(src, base){
+  if (!src) return '';
+  src = String(src).trim();
+  if (!src) return '';
+  if (src.startsWith('//')) return 'https:'+src;
+  if (/^https?:\/\//i.test(src)) return src;
+  if (src.startsWith('/')) return base.replace(/\/$/,'') + src;
+  return src;
+}
+
+async function enrichImages(items, maxFetch = 8){
+  let fetched = 0;
+  for (const it of items){
+    if (fetched >= maxFetch) break;
+    if (it.image) continue;
+    if (!it.url) continue;
+    try{
+      const base = it.url.split('/').slice(0,3).join('/');
+      const html = await httpGet(it.url, { 'Referer': base + '/' });
+      const $ = (await import('cheerio')).load(html);
+      const og = $('meta[property="og:image"]').attr('content') || '';
+      const img = og || $('img').first().attr('src') || '';
+      const abs = absolutizeUrl(img, base);
+      if (abs){ it.image = abs; fetched++; }
+    }catch{ /* ignore */ }
+  }
+  return items;
+}
 export async function aggregate(q){
   const started = Date.now();
   const results = await Promise.allSettled(sources.map(s => fetchAndParse(s, q)));
@@ -42,6 +71,7 @@ export async function aggregate(q){
     return true;
   });
 
+  await enrichImages(clean, 10);
   return { items: clean, meta };
 }
 
