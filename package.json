@@ -3,8 +3,7 @@
   "type": "module",
   "version": "1.0.0",
   "scripts": {
-    "dev:netlify": "netlify dev",
-    "dev:vercel": "vercel dev"
+    "dev:netlify": "netlify dev"
   },
   "dependencies": {
     "cheerio": "^1.0.0-rc.12"
