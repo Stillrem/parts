@@ -200,7 +200,7 @@ export const sources = [
           const link = absUrl(modelHref, BASE_SEARS);
           const title = first(el$.find('.card-title, .product-title, .model-title').text(), el$.attr('aria-label'), el$.text());
           const image = pickSearsThumb(el$);
-          const part_number = pnText(title) || pnFromLink(link);
+          const part_number = pnFromLink(link) || pnText(title);
 
           out.push({
             title: t(title),
@@ -220,7 +220,7 @@ export const sources = [
             seen.add(h);
             const link = absUrl(h, BASE_SEARS);
             const title = t($(a).text()) || link;
-            const part_number = pnText(title) || pnFromLink(link);
+            const part_number = pnFromLink(link) || pnText(title);
             out.push({ title, link, image: '', source: 'SearsPartsDirect', part_number });
           });
         }
