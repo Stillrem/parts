@@ -1,217 +1,203 @@
 // functions/lib/sources.js
-import * as cheerio from 'cheerio';
+import * as cheerio from "cheerio";
 
-/* ========= helpers ========= */
-const UA =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123 Safari/537.36';
+/* ========== helpers (без внешних зависимостей) ========== */
 
-async function fetchHTML(url, extra = {}) {
-  const res = await fetch(url, {
-    headers: {
-      'User-Agent': UA,
-      'Accept-Language': 'en-US,en;q=0.9',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      ...extra
+// Разворачиваем Next.js оптимизатор: "/_next/image?url=<ENCODED>&w=..."
+function unwrapNextImage(src) {
+  if (!src) return "";
+  try {
+    const u = new URL(src, "https://dummy.base"); // позволяет парсить относительные пути
+    if (u.pathname.includes("/_next/image") && u.searchParams.has("url")) {
+      const original = u.searchParams.get("url");
+      return decodeURIComponent(original || "");
     }
-  });
-  if (!res.ok) throw new Error('HTTP ' + res.status + ' on ' + url);
-  return await res.text();
-}
-
-function pn(s='') {
-  const m = String(s).match(/[A-Z0-9-]{5,}/i);
-  return m ? m[0].toUpperCase() : '';
-}
-
-function firstNonEmpty(...vals){
-  for (const v of vals){ if (v && String(v).trim()) return String(v).trim(); }
-  return '';
-}
-
-// unwrap Next.js /_next/image?url=<ENCODED>&w=...
-function unwrapNextImage(src){
-  if(!src) return '';
-  try{
-    const u = new URL(src, 'https://dummy.base'); // позволяет парсить относительные
-    if (u.pathname.includes('/_next/image') && u.searchParams.has('url')) {
-      const original = u.searchParams.get('url');
-      return decodeURIComponent(original || '');
-    }
-  }catch{}
+  } catch {}
   return src;
 }
 
-function absolutize(src, base){
-  if(!src) return '';
+function absolutize(src, base) {
+  if (!src) return "";
   src = String(src).trim();
-  if(!src) return '';
-  src = unwrapNextImage(src); // важно для RepairClinic
-  if (src.startsWith('//')) return 'https:' + src;
+  if (!src) return "";
+  // сперва разворачиваем /_next/image (актуально для RepairClinic)
+  src = unwrapNextImage(src);
+  if (src.startsWith("//")) return "https:" + src;
   if (/^https?:\/\//i.test(src)) return src;
-  if (src.startsWith('/')) {
-    try { const u = new URL(base); return u.origin + src; } catch { return src; }
-  }
-  // srcset "url 1x, url 2x" → берём первый
+  if (src.startsWith("/")) return base.replace(/\/$/, "") + src;
+  // srcset: берём первый URL
   if (/\s+\d+x(?:,|$)/.test(src)) {
-    const first = src.split(',')[0].trim().split(' ')[0].trim();
+    const first = src.split(",")[0].trim().split(" ")[0].trim();
     return absolutize(first, base);
   }
   return src;
 }
 
-/* Sears: брать product-thumb только с CDN s.sears.com */
-function pickSearsThumb($ctx){
-  const BASE = 'https://www.searspartsdirect.com';
+function textClean(s) {
+  return String(s || "").replace(/\s+/g, " ").trim();
+}
 
-  // 1) прямой src первого <img>
-  let img = absolutize($ctx.find('img').attr('src') || '', BASE);
+function firstNonEmpty(...vals) {
+  for (const v of vals) {
+    const t = textClean(v);
+    if (t) return t;
+  }
+  return "";
+}
+
+/** Sears: выбрать product-thumb ТОЛЬКО с CDN s.sears.com */
+function pickSearsThumb($ctx) {
+  const BASE = "https://www.searspartsdirect.com";
+
+  // 1) прямой src у первого <img>
+  let img = absolutize($ctx.find("img").attr("src") || "", BASE);
   if (/^https?:\/\/s\.sears\.com\/is\/image\/Sears\//i.test(img)) return img;
 
-  // 2) перебор всех <img> в карточке
-  $ctx.find('img').each((_, el)=>{
+  // 2) перебор всех картинок внутри карточки в поисках CDN Sears
+  $ctx.find("img").each((_, el) => {
     const raw =
       el.attribs?.src ||
-      el.attribs?.['data-src'] ||
+      el.attribs?.["data-src"] ||
       el.attribs?.srcset ||
-      '';
+      "";
     const abs = absolutize(raw, BASE);
     if (/^https?:\/\/s\.sears\.com\/is\/image\/Sears\//i.test(abs)) {
       img = abs;
       return false; // break
     }
   });
-  return img || '';
+
+  return img || "";
 }
 
-/* ========= SOURCES ========= */
-/* 1) RepairClinic: плитки + корректные картинки (unwrap /_next/image) */
-export async function fromRepairClinic(q){
-  const BASE='https://www.repairclinic.com';
-  const url = `${BASE}/Shop-For-Parts?query=${encodeURIComponent(q)}`;
+/* ========== PUBLIC API: экспорт одного массива sources ========== */
+export const sources = [
+  // -------- SearsPartsDirect --------
+  {
+    name: "SearsPartsDirect",
+    searchUrl: (query) =>
+      `https://www.searspartsdirect.com/search?q=${encodeURIComponent(query)}`,
 
-  const items = [];
-  try{
-    const html = await fetchHTML(url, { Referer: BASE + '/' });
-    const $ = cheerio.load(html);
+    // parser получает готовый HTML (его скачивает aggregate.js) и НИЧЕГО не делает с сетью
+    parser: async (html) => {
+      const $ = cheerio.load(html);
+      const results = [];
 
-    const tiles = $([
-      '[data-qa="product-tile"]',
-      '[data-automation-id="product-tile"]',
-      '.product-card',
-      '.product-tile',
-      '.search-results__grid-item',
-      '.product-grid__item'
-    ].join(','));
+      // 1) карточки деталей/товаров на странице поиска
+      $(
+        ".part-card, .product-card, .card, [data-component='product-card'], a[href*='/part/'], a[href*='/product/']"
+      ).each((_, el) => {
+        const el$ = $(el);
+        const a$ = el$.is("a") ? el$ : el$.find("a[href]").first();
+        const href = a$.attr("href") || "";
+        if (!/\/part\/|\/product\//i.test(href || "")) return;
 
-    tiles.each((_, el)=>{
-      const el$ = $(el);
-      const a$  = el$.find('a[href]').first();
-      let href  = (a$.attr('href')||'').trim();
-      if (!href) return;
-      if (href.startsWith('/')) href = BASE + href;
+        const title = firstNonEmpty(
+          el$.find(".card-title").text(),
+          el$.find(".product-title").text(),
+          el$.text()
+        );
 
-      const name = firstNonEmpty(
-        el$.find('[data-qa="product-title"]').text(),
-        el$.find('.product-title').text(),
-        a$.attr('title'),
-        el$.text()
-      ).replace(/\s+/g,' ').trim();
+        const link = absolutize(href, "https://www.searspartsdirect.com");
+        const image = pickSearsThumb(el$); // только s.sears.com/is/image/Sears/...
 
-      let img =
-        el$.find('img').attr('data-src') ||
-        el$.find('img').attr('data-original') ||
-        el$.find('img').attr('data-srcset') ||
-        el$.find('img').attr('srcset') ||
-        el$.find('img').attr('src') || '';
-      img = absolutize(img, BASE);
-
-      items.push({
-        supplier:'RepairClinic',
-        name, url: href, image: img,
-        price:'', currency:'',
-        part_number: pn(name)
+        results.push({
+          title,
+          link,
+          image: image || null,
+          source: "SearsPartsDirect",
+        });
       });
-    });
 
-    if (items.length) return items.slice(0, 80);
-  }catch{
-    // упадём в фолбэк ниже
-  }
+      // 2) fallback: карточки МОДЕЛЕЙ (Shop parts), если деталей нет
+      if (!results.length) {
+        $(".card, .product-card, [data-component='product-card']").each(
+          (_, el) => {
+            const el$ = $(el);
+            const a$ = el$.find("a[href]").first();
+            const href = a$.attr("href") || "";
+            if (!/\/model\//i.test(href || "")) return;
 
-  // анти-бот/нет плиток → возвращаем кликабельную ссылку
-  return [{
-    supplier:'RepairClinic',
-    name:`Открыть поиск на RepairClinic для: ${q}`,
-    url, image:'', price:'', currency:'', part_number: pn(q)
-  }];
-}
+            // пытаемся найти кнопку "Shop parts"
+            let shop = "";
+            el$.find("a[href]").each((_, x) => {
+              const t = textClean($(x).text()).toLowerCase();
+              const h = $(x).attr("href") || "";
+              if (/shop\s*parts/i.test(t) && h) shop = h;
+            });
 
-/* 2) SearsPartsDirect: детали/товары + правильные миниатюры с s.sears.com; по моделям — Shop parts */
-export async function fromSears(q){
-  const BASE = 'https://www.searspartsdirect.com';
-  const url  = `${BASE}/search?q=${encodeURIComponent(q)}`;
+            const link = absolutize(
+              shop || href,
+              "https://www.searspartsdirect.com"
+            );
+            const title = textClean(el$.text());
+            const image = pickSearsThumb(el$);
 
-  const html = await fetchHTML(url, { Referer: BASE + '/' });
-  const $ = cheerio.load(html);
-  const items = [];
+            results.push({
+              title,
+              link,
+              image: image || null,
+              source: "SearsPartsDirect",
+            });
+          }
+        );
+      }
 
-  // деталь/товар на странице поиска
-  $('.part-card, .product-card, .card, [data-component="product-card"], a[href*="/part/"], a[href*="/product/"]').each((_, el)=>{
-    const el$ = $(el);
-    const a$  = el$.is('a') ? el$ : el$.find('a[href]').first();
-    let href  = (a$.attr('href')||'').trim();
-    if (!/\/part\/|\/product\//i.test(href||'')) return;
-    if (href.startsWith('/')) href = BASE + href;
+      return results;
+    },
+  },
 
-    const name = firstNonEmpty(
-      el$.find('.card-title').text(),
-      el$.find('.product-title').text(),
-      el$.text()
-    ).replace(/\s+/g,' ').trim();
+  // -------- RepairClinic --------
+  {
+    name: "RepairClinic",
+    searchUrl: (query) =>
+      `https://www.repairclinic.com/Shop-For-Parts?query=${encodeURIComponent(
+        query
+      )}`,
 
-    const image = pickSearsThumb(el$);
+    parser: async (html) => {
+      const $ = cheerio.load(html);
+      const results = [];
 
-    items.push({
-      supplier:'SearsPartsDirect',
-      name, url: href, image,
-      price:'', currency:'', part_number: pn(name)
-    });
-  });
+      // плитки результатов (несколько селекторов, т.к. разметка может меняться)
+      $(
+        "[data-qa='product-tile'], [data-automation-id='product-tile'], .product-card, .product-tile, .search-results__grid-item, .product-grid__item"
+      ).each((_, el) => {
+        const el$ = $(el);
+        const a$ = el$.find("a[href]").first();
+        const href = a$.attr("href") || "";
+        if (!href) return;
 
-  if (items.length) return items;
+        const title = firstNonEmpty(
+          el$.find("[data-qa='product-title']").text(),
+          el$.find(".product-title").text(),
+          a$.attr("title"),
+          el$.text()
+        );
 
-  // фолбэк по моделям → карточки «Shop parts»
-  $('.card, .product-card, [data-component="product-card"]').each((_, el)=>{
-    const el$ = $(el);
-    const a$  = el$.find('a[href]').first();
-    let href  = (a$.attr('href')||'').trim();
-    if (!/\/model\//i.test(href||'')) return;
+        // IMG: data-*, srcset, src → разворачиваем /_next/image → абсолютный URL
+        let imgRaw =
+          el$.find("img").attr("data-src") ||
+          el$.find("img").attr("data-original") ||
+          el$.find("img").attr("data-srcset") ||
+          el$.find("img").attr("srcset") ||
+          el$.find("img").attr("src") ||
+          "";
+        const image = absolutize(imgRaw, "https://www.repairclinic.com");
 
-    // явная ссылка "Shop parts", если есть
-    let shop = '';
-    el$.find('a[href]').each((_, x)=>{
-      const t = $(x).text().trim().toLowerCase();
-      const h = $(x).attr('href') || '';
-      if (/shop\s*parts/i.test(t) && h) shop = h;
-    });
+        const link = absolutize(href, "https://www.repairclinic.com");
 
-    const link  = shop || href;
-    const abs   = link.startsWith('/') ? (BASE + link) : link;
-    const image = pickSearsThumb(el$);
-    const name  = el$.text().replace(/\s+/g,' ').trim();
+        results.push({
+          title,
+          link,
+          image: image || null,
+          source: "RepairClinic",
+        });
+      });
 
-    items.push({
-      supplier:'SearsPartsDirect',
-      name, url: abs, image,
-      price:'', currency:'', part_number: pn(name)
-    });
-  });
-
-  return items;
-}
-
-/* 3) Заглушки под старые импорты, чтобы не было 502 */
-export async function fromAppliancePartsPros(q){ return []; }
-export async function fromPartSelect(q){ return []; }
-export async function fromEbayAPI(q){ return []; }
-export async function fromAmazonAPI(q){ return []; }
+      // Если RC отдал анти-бот и плиток нет — вернём пусто;
+      // твой aggregate уже покажет fallback-карточку "Открыть поиск…" или просто вернёт другие источники.
+      return results;
+    },
+  },
+];
