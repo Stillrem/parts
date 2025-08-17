@@ -57,22 +57,70 @@ export async function fromAppliancePartsPros(q){
   return items;
 }
 
-//export async function fromPartSelect(q){
-  //const url = `https://www.partselect.com/AdvancedSearch.aspx?SearchTerm=${encodeURIComponent(q)}`;
-  //const html = await fetchHTML(url);
-  //const $ = cheerio.load(html);
-  //const items = [];
-  //$('.product-list li, .product-list__item, .ps-product-tile').each((_,el)=>{
-    //const name = $(el).text().trim().replace(/\s+/g,' ');
-    //const a = $(el).find('a[href]').first();
-    //let link = a.attr('href') || '';
-    //if(link && link.startsWith('/')) link = 'https://www.partselect.com' + link;
-    //const img = $(el).find('img').attr('src') || '';
-    //const { price, currency } = money($(el).text());
-    //items.push({ supplier:'PartSelect', name, url:link, image:img, price, currency, part_number:pn(name) });
-  //});
-  //return items;
-//}
+
+export async function fromPartSelect(q){
+  // PartSelect shows results on either a search list or directly on a product detail page (PDP).
+  // We'll request the search page first; if no list items are found, we'll try PDP extraction from the same HTML.
+  const url = `https://www.partselect.com/AdvancedSearch.aspx?SearchTerm=${encodeURIComponent(q)}`;
+  const html = await fetchHTML(url);
+  const $ = cheerio.load(html);
+  const items = [];
+
+  // Try list mode
+  $('.product-list li, .product-list__item, .ps-product-tile').each((_,el)=>{
+    const name = $(el).text().trim().replace(/\s+/g,' ');
+    const a = $(el).find('a[href]').first();
+    let link = a.attr('href') || '';
+    if(link && link.startsWith('/')) link = 'https://www.partselect.com' + link;
+    const img = $(el).find('img').attr('src') || '';
+    const { price, currency } = money($(el).text());
+    items.push({ supplier:'PartSelect', name, url:link, image:img, price, currency, part_number:pn(name) });
+  });
+
+  if(items.length){
+    return items;
+  }
+
+  // Fallback: PDP mode — extract from product page HTML that search might have redirected/rendered
+  const title = ($('h1[itemprop="name"]').first().text()
+              || $('.product-title').first().text()
+              || $('h1').first().text()).trim().replace(/\s+/g,' ');
+
+  if(title){
+    // Best-effort URL (if search HTML contains canonical)
+    let canonical = $('link[rel="canonical"]').attr('href') || '';
+    if(!canonical){
+      canonical = $('meta[property="og:url"]').attr('content') || '';
+    }
+    const priceText = ($('[itemprop="price"]').attr('content')
+                    || $('.price, .product-price').first().text()
+                    || '').toString();
+    const { price, currency } = money(priceText);
+    const img = ($('#main-product-image').attr('src')
+              || $('.product-image img').attr('src')
+              || $('meta[property="og:image"]').attr('content')
+              || '');
+
+    const text = $.root().text();
+    const mfgMatches = Array.from(text.matchAll(/\b(?:Manufacturer\s+)?Part\s+Number\s*[:#]?\s*([A-Z0-9-]{5,})/gi)).map(m=>m[1].toUpperCase());
+    const psMatches  = Array.from(text.matchAll(/\bPS\d{5,}\b/g)).map(m=>m[0].toUpperCase());
+    const eq = Array.from(new Set([...mfgMatches, ...psMatches]));
+
+    return [{
+      supplier: 'PartSelect',
+      name: title,
+      url: canonical || url,
+      image: img,
+      price,
+      currency,
+      part_number: pn(title) || (eq[0] || ''),
+      equivalents: eq,
+    }];
+  }
+
+  return items;
+}
+
 
 export async function fromSears(q){
   const url = `https://www.searspartsdirect.com/search?q=${encodeURIComponent(q)}`;
