@@ -61,7 +61,7 @@ export async function fromAppliancePartsPros(q){
 export async function fromPartSelect(q){
   // PartSelect shows results on either a search list or directly on a product detail page (PDP).
   // We'll request the search page first; if no list items are found, we'll try PDP extraction from the same HTML.
-  const url = `https://www.partselect.com/AdvancedSearch.aspx?SearchTerm=${encodeURIComponent(q)}`;
+  const url = `https://www.partselect.com/Search.aspx?SearchTerm=${encodeURIComponent(q)}`;
   const html = await fetchHTML(url);
   const $ = cheerio.load(html);
   const items = [];
