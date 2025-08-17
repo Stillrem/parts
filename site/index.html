@@ -1,0 +1,55 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Parts Hub</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #111; color: #eee; padding: 20px; }
+    input, select, button { padding: 8px; margin: 5px; }
+    .card { border: 1px solid #333; padding: 10px; margin: 10px 0; background: #222; }
+    img { max-width: 150px; display: block; margin: 5px 0; }
+  </style>
+</head>
+<body>
+  <h1>Parts Hub</h1>
+  <p>Поиск по магазинам (Sears, RepairClinic, APP, PartSelect, eBay, Amazon*)</p>
+  <input id="partnum" placeholder="Введите Part Number" />
+  <select id="store">
+    <option value="all">Все магазины</option>
+    <option>Sears</option>
+    <option>RepairClinic</option>
+    <option>AppliancePartsPros</option>
+    <option>PartSelect</option>
+    <option>eBay</option>
+  </select>
+  <button onclick="search()">Искать</button>
+  <button onclick="demo()">Демо</button>
+  <div id="results"></div>
+<script>
+async function search(q) {
+  const pn = q || document.getElementById('partnum').value;
+  const store = document.getElementById('store').value;
+  document.getElementById('results').innerHTML = "Загрузка...";
+  try {
+    let url = `/api/search?q=${encodeURIComponent(pn)}&store=${store}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if(!data || !data.results) throw new Error("Нет данных");
+    document.getElementById('results').innerHTML = data.results.map(r => `
+      <div class="card">
+        <b>${r.name}</b><br>
+        Part#: ${r.partNumber}<br>
+        Цена: ${r.price || 'N/A'}<br>
+        <a href="${r.url}" target="_blank">Перейти</a><br>
+        ${r.image ? `<img src="${r.image}">` : ''}
+      </div>
+    `).join('');
+  } catch(e) {
+    document.getElementById('results').innerHTML = "Ошибка: " + e;
+  }
+}
+function demo(){ search("__demo"); }
+</script>
+</body>
+</html>
