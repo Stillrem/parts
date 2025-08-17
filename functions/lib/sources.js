@@ -23,10 +23,10 @@ function money(text=''){
 
 function pn(s=''){
   const m=String(s).match(/[A-Z0-9-]{5,}/i);
-  return m?m[0].toUpperCase():''; 
+  return m?m[0].toUpperCase():'';
 }
 
-/* ---------- Картинки: разворачиваем Next.js /_next/image и нормализуем URL ---------- */
+/* ---------- Картинки ---------- */
 function unwrapNextImage(src){
   if(!src) return '';
   try{
@@ -69,8 +69,8 @@ function pickImg($ctx, base){
   return '';
 }
 
-/* ---------- Дотягивание фото прямо со страницы детали (og:image/первая img) ---------- */
-async function enrichImages(items, maxFetch = 6){
+/* ---------- Дотягивание фото со страницы детали (берём og:image) ---------- */
+async function enrichImages(items, maxFetch = 8){
   let done = 0;
   for (const it of items){
     if (done >= maxFetch) break;
@@ -79,6 +79,7 @@ async function enrichImages(items, maxFetch = 6){
     try{
       const html = await fetchHTML(it.url);
       const $ = cheerio.load(html);
+      // Sears / RC обе кладут корректную картинку в og:image
       const og = $('meta[property="og:image"]').attr('content') || '';
       const firstImg = $('img').first().attr('src') || '';
       const cand = og || firstImg;
@@ -93,8 +94,8 @@ async function enrichImages(items, maxFetch = 6){
 }
 
 /* ================== RepairClinic ==================
-   Если анти-бот не даёт плитки — возвращаем ссылку на поиск (без фото).
-   Если плитки есть — возвращаем их и дотягиваем фото с карточек. */
+   Если анти-бот — вернём ссылку на поиск (без фото).
+   Если плитки есть — берём картинку, разворачиваем /_next/image и при необходимости дотягиваем og:image. */
 export async function fromRepairClinic(q){
   const BASE='https://www.repairclinic.com';
   const url = `${BASE}/Shop-For-Parts?query=${encodeURIComponent(q)}`;
@@ -132,7 +133,7 @@ export async function fromRepairClinic(q){
           if (href.startsWith('/')) href = BASE + href;
           const ptxt = (el$.find('[data-qa="product-price"], .price, [itemprop="price"]').first().text() || '').trim();
           const { price, currency } = money(ptxt);
-          const img = pickImg(el$, BASE);
+          const img = pickImg(el$, BASE); // развернёт /_next/image → прямой CDN
           items.push({
             supplier:'RepairClinic',
             name, url: href, image: img, price, currency,
@@ -142,13 +143,13 @@ export async function fromRepairClinic(q){
       });
 
       if (items.length){
-        await enrichImages(items, 6);
+        await enrichImages(items, 6); // страховка: дотянем og:image
         return items.slice(0, 80);
       }
     }
   } catch { /* ignore */ }
 
-  // фолбэк: даём ссылку на поиск (картинки тут не достать)
+  // фолбэк: кликабельная ссылка на поиск (картинку тут не достать)
   return [{
     supplier: 'RepairClinic',
     name: `Открыть поиск на RepairClinic для: ${q}`,
@@ -159,8 +160,9 @@ export async function fromRepairClinic(q){
 }
 
 /* ================== Sears PartsDirect ==================
-   По парт-номеру — детали; по модели — карточки моделей (Shop parts).
-   Всегда дотягиваем фото для первых элементов. */
+   На поиске игнорируем картинки (часто декоративные).
+   Берём name+url с поисковой страницы, а затем всегда дотягиваем og:image со страницы детали → картинка будет правильная. 
+   По модели, если деталей нет, отдаём карточки моделей (Shop parts) и тоже дотягиваем og:image. */
 export async function fromSears(q){
   const BASE = 'https://www.searspartsdirect.com';
   const searchUrl = `${BASE}/search?q=${encodeURIComponent(q)}`;
@@ -168,48 +170,45 @@ export async function fromSears(q){
   const $ = cheerio.load(html);
   const items = [];
 
-  const push = ($ctx, name, href) => {
+  const push = (name, href) => {
     if (!name || !href) return;
     if (href.startsWith('/')) href = BASE + href;
-    const text = ($ctx?.text?.() || '').trim().replace(/\s+/g,' ');
-    const { price, currency } = money(text);
-    const img = pickImg($ctx, BASE);
-    items.push({ supplier:'SearsPartsDirect', name, url:href, image:img, price, currency, part_number:pn(name) });
+    // НАМЕРЕННО НЕ ЗАПОЛНЯЕМ image здесь — возьмём с og:image на карточке детали
+    items.push({ supplier:'SearsPartsDirect', name, url:href, image:'', price:'', currency:'', part_number:pn(name) });
   };
 
-  // 1) Детали/товары прямо со страницы поиска
+  // 1) Детали/товары с поисковой
   $('.card, .product-card, [data-component="product-card"], a[href*="/product/"], a[href*="/part/"]').each((_,el)=>{
     const el$ = $(el);
     const a$ = el$.is('a') ? el$ : el$.find('a[href]').first();
     const href = (a$.attr('href')||'').trim();
     const name = (el$.text() || a$.text()).trim().replace(/\s+/g,' ');
-    if (/\/part\/|\/product\//i.test(href||'')) push(el$, name, href);
+    if (/\/part\/|\/product\//i.test(href||'')) push(name, href);
   });
   if (items.length){
-    await enrichImages(items, 6);
+    await enrichImages(items, 8); // ВСЕГДА дотягиваем og:image → правильная картинка
     return items;
   }
 
-  // 2) Фолбэк по МОДЕЛЯМ: карточки моделей (Shop parts)
+  // 2) Фолбэк по МОДЕЛЯМ: карточки моделей (Shop parts), потом дотягиваем og:image
   $('.card, .product-card, [data-component="product-card"]').each((_, el) => {
     const el$ = $(el);
     const a$ = el$.find('a[href]').first();
     let href = (a$.attr('href')||'').trim();
     if (!/\/model\//i.test(href||'')) return;
 
-    // ищем кнопку Shop parts
+    // «Shop parts» если есть
     let shopHref = '';
     el$.find('a[href]').each((_,x)=>{
       const t = $(x).text().trim().toLowerCase();
       const h = $(x).attr('href') || '';
       if (/shop\s*parts/i.test(t) && h) shopHref = h;
     });
-
     const link = shopHref || href;
     const name = el$.text().trim().replace(/\s+/g,' ');
-    push(el$, name, link);
+    push(name, link);
   });
 
-  await enrichImages(items, 6);
+  await enrichImages(items, 8);
   return items;
 }
