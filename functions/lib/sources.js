@@ -52,40 +52,6 @@ export async function fromRepairClinic(q){
   return items;
 }
 
-// SearsPartsDirect — search page
-export async function fromSears(q){
-  const url = `https://www.searspartsdirect.com/search?q=${encodeURIComponent(q)}`;
-  const html = await fetchHTML(url);
-  const $ = cheerio.load(html);
-  const items = [];
-  // Common patterns: product cards and anchors to product/part pages
-  $('.card, .product-card, [data-component="product-card"], a[href*="/product/"], a[href*="/part/"]').each((_,el)=>{
-    const el$ = $(el);
-    const text = el$.text().trim().replace(/\s+/g,' ');
-    // Prefer inner link
-    let a = el$.is('a') ? el$ : el$.find('a[href]').first();
-    let link = (a.attr('href')||'').trim();
-    if (!link) return;
-    if (link.startsWith('/')) link = 'https://www.searspartsdirect.com'+link;
-    const { price, currency } = money(text);
-    const img = el$.find('img').attr('src')||'';
-    const name = text || a.text().trim();
-    if (name && link) items.push({ supplier:'SearsPartsDirect', name, url:link, image:img, price, currency, part_number:pn(name) });
-  });
-  // Fallback: PDP
-  if (!items.length){
-    const title = ($('h1').first().text()||'').trim();
-    if (title){
-      const priceText = ($('[data-qa="price"], .price').first().text()||'').trim();
-      const { price, currency } = money(priceText);
-      const canonical = $('link[rel="canonical"]').attr('href') || url;
-      const img = $('meta[property="og:image"]').attr('content') || $('img').first().attr('src') || '';
-      items.push({ supplier:'SearsPartsDirect', name:title, url:canonical, image:img, price, currency, part_number:pn(title) });
-    }
-  }
-  return items;
-}
-
 // ========== SearsPartsDirect (модель → диаграммы → детали) ==========
 export async function fromSears(q){
   const BASE = 'https://www.searspartsdirect.com';
