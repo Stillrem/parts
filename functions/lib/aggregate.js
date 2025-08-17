@@ -65,19 +65,8 @@ function proxyImage(u) {
   return `/api/img?u=${encodeURIComponent(u)}`;
 }
 
-// «Наша» PN-картинка (чтобы понять, что нужно перепроверить)
+// «Наша» PN-картинка (чтобы понять, что нужно перепроверить на PDP)
 const BUILT_SEARS_PN_IMG = /https?:\/\/s\.sears\.com\/is\/image\/Sears\/PD_0022_628_\d+\b/i;
-
-// HEAD-проверка файла на CDN (и отсев микроскопических ответов)
-async function headOkAndBig(url) {
-  try {
-    const resp = await fetch(url, { method: 'HEAD' });
-    if (!resp.ok) return false;
-    const len = Number(resp.headers.get('content-length') || '0');
-    if (len && len < 2048) return false;
-    return true;
-  } catch { return false; }
-}
 
 // Универсальный поиск картинки в HTML: og:image -> img/source -> Sears PN в тексте
 function findAnyImageFromHtml(html, baseHost) {
@@ -107,12 +96,12 @@ function findAnyImageFromHtml(html, baseHost) {
   catch { return found; }
 }
 
-// Извлечь «замещающий» PN со страницы Sears (текст вида "Replaces #5304464097")
+// Извлечь «замещающий» PN у Sears (текст "Replaces #5304464097")
 function findReplacementPNFromHtml(html) {
   const rx = /Replaces\s*#?\s*(\d{7,})/ig;
   let m, last = '';
   while ((m = rx.exec(html))) last = m[1];
-  return last; // берём последний — обычно он самый релевантный
+  return last; // берём последний — обычно верный
 }
 
 /* ---------- main ---------- */
@@ -163,7 +152,7 @@ export async function aggregate(q) {
   // 1) Sears: если нет картинки ИЛИ она «словесная» — строим по PN
   const BAD_SEARS_IMG = /PD_0022_628_(KENMORE|CROSLEY|MICROWAVE|WHITE-WESTINGHOUSE|LATCH)\b/i;
   for (const it of clean) {
-    if (it.supplier !== 'SearsPartsDirect')) continue;
+    if (it.supplier !== 'SearsPartsDirect') continue;   // ← исправлено: без лишней скобки
     const pnMatch = String(it.part_number || '').match(/\d{7,}/);
     const pn = pnMatch ? pnMatch[0] : '';
     const missing = !it.image;
@@ -185,7 +174,7 @@ export async function aggregate(q) {
     if (isRC && !it.image) {
       toFetchPDP.push(it);
     }
-    if (toFetchPDP.length >= 16) break; // лимит на PDP-запросы
+    if (toFetchPDP.length >= 12) break; // умеренный лимит
   }
 
   await Promise.allSettled(
@@ -201,10 +190,16 @@ export async function aggregate(q) {
         const host = new URL(it.url).hostname;
         let img = findAnyImageFromHtml(html, host);
 
-        // Sears: если картинки не нашли — попробуем вытащить «замещающий PN» и построить по нему
+        // Sears: если картинки не нашли — попробуем «замещающий PN» (Replaces #…)
         if (!img && host.includes('searspartsdirect.com')) {
-          const replPN = findReplacementPNFromHtml(html); // ← АВТОМАТИКА!
+          const replPN = findReplacementPNFromHtml(html);
           if (replPN) img = searsImageFromPN(replPN);
+        }
+
+        if (!img && host.includes('searspartsdirect.com')) {
+          // последний шанс — иллюстрация по исходному PN
+          const pn = (String(it.part_number || '').match(/\d{7,}/) || [])[0] || '';
+          if (pn) img = searsIllustrationFromPN(pn);
         }
 
         if (img) {
@@ -212,32 +207,9 @@ export async function aggregate(q) {
           if (host.includes('repairclinic.com'))      img = normalizeRCImage(img);
           it.image = img;
         }
-      } catch {
-        // пропускаем
-      }
+      } catch { /* пропускаем */ }
     })
   );
-
-  // 2c) Sears: если «PN-картинка» не существует — заменим на _Illustration
-  async function fixSearsBuiltOrIllustration(it) {
-    if (it.supplier !== 'SearsPartsDirect' || !BUILT_SEARS_PN_IMG.test(String(it.image||''))) return;
-    const pn = (String(it.part_number || '').match(/\d{7,}/) || [])[0] || '';
-    if (!pn) return;
-    const built = searsImageFromPN(pn);
-    if (await headOkAndBig(built)) return; // всё ок
-    const ill = searsIllustrationFromPN(pn);
-    if (await headOkAndBig(ill)) it.image = ill;
-  }
-  {
-    const candidates = [];
-    for (const it of clean) {
-      if (it.supplier === 'SearsPartsDirect' && BUILT_SEARS_PN_IMG.test(String(it.image || ''))) {
-        candidates.push(it);
-        if (candidates.length >= 16) break;
-      }
-    }
-    await Promise.allSettled(candidates.map(fixSearsBuiltOrIllustration));
-  }
 
   // 3) Проксируем картинки через /api/img
   for (const it of clean) {
