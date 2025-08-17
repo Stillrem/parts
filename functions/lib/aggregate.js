@@ -3,9 +3,9 @@ import { sources } from './sources.js';
 import httpGet from './http_get.js';
 import * as cheerio from 'cheerio';
 
-/* ---------- helpers for images ---------- */
+/* ---------- helpers ---------- */
 
-// JPEG для Sears по PN (Scene7/Adobe)
+// Построение JPEG для Sears по PN (Scene7/Adobe)
 function searsImageFromPN(
   pn,
   { wid = 285, hei = 200, qlt = 90, sharpen = 2 } = {}
@@ -15,7 +15,32 @@ function searsImageFromPN(
   return `https://s.sears.com/is/image/Sears/PD_0022_628_${pn}?wid=${wid}&hei=${hei}&fmt=pjpg&qlt=${qlt}&op_sharpen=${sharpen}`;
 }
 
-// Заворачиваем внешние картинки в свой прокси /api/img (чтобы не упираться в CSP/3rd-party)
+// Нормализация ссылки Sears: если og:image без параметров — добавим их
+function normalizeSearsImage(u) {
+  try {
+    const url = new URL(u);
+    if (url.hostname !== 's.sears.com') return u;
+    const hasSize =
+      url.searchParams.has('wid') ||
+      url.searchParams.has('w') ||
+      url.searchParams.has('hei') ||
+      url.searchParams.has('h') ||
+      url.searchParams.has('fmt');
+    if (!hasSize) {
+      url.searchParams.set('wid', '285');
+      url.searchParams.set('hei', '200');
+      url.searchParams.set('fmt', 'pjpg');
+      url.searchParams.set('qlt', '90');
+      url.searchParams.set('op_sharpen', '2');
+      return url.toString();
+    }
+    return u;
+  } catch {
+    return u;
+  }
+}
+
+// Прокси картинок через свой домен, чтобы не упереться в CSP/браузер
 function proxyImage(u) {
   if (!u) return '';
   if (u.startsWith('/api/img?u=')) return u; // уже проксировано
@@ -30,28 +55,24 @@ function proxyImage(u) {
   return `/api/img?u=${encodeURIComponent(u)}`;
 }
 
+// Узнаём, «наша» ли картинка, построенная из PN (то, что нужно пере-проверить по og:image)
+const BUILT_SEARS_PN_IMG = /https?:\/\/s\.sears\.com\/is\/image\/Sears\/PD_0022_628_\d+\b/i;
+
 /* ---------- main ---------- */
 
 export async function aggregate(q) {
   const started = Date.now();
-
-  // запускаем все источники параллельно
-  const results = await Promise.allSettled(
-    sources.map((s) => fetchAndParse(s, q))
-  );
+  const results = await Promise.allSettled(sources.map((s) => fetchAndParse(s, q)));
 
   const items = [];
   const meta = { took_ms: Date.now() - started, sources: [] };
 
-  // собираем результаты
   for (let i = 0; i < results.length; i++) {
     const name = sources[i].name;
     const r = results[i];
-
     if (r.status === 'fulfilled') {
       const arr = Array.isArray(r.value) ? r.value : [];
       meta.sources.push({ name, ok: true, count: arr.length });
-
       for (const x of arr) {
         items.push({
           supplier: name,
@@ -66,11 +87,7 @@ export async function aggregate(q) {
         });
       }
     } else {
-      meta.sources.push({
-        name,
-        ok: false,
-        error: String(r.reason?.message || r.reason)
-      });
+      meta.sources.push({ name, ok: false, error: String(r.reason?.message || r.reason) });
       console.warn('[aggregate] failed for', name, r.reason?.message || r.reason);
     }
   }
@@ -86,41 +103,47 @@ export async function aggregate(q) {
 
   /* ---------- постобработка изображений ---------- */
 
-  // 1) Sears: если нет картинки ИЛИ она "битая" (собрана из слов), строим по PN
-  const BAD_SEARS_IMG =
-    /PD_0022_628_(KENMORE|CROSLEY|MICROWAVE|WHITE-WESTINGHOUSE|LATCH)\b/i;
+  // 1) Sears: если нет картинки ИЛИ она «словесная» (старый баг) — строим по PN
+  const BAD_SEARS_IMG = /PD_0022_628_(KENMORE|CROSLEY|MICROWAVE|WHITE-WESTINGHOUSE|LATCH)\b/i;
 
   for (const it of clean) {
     if (it.supplier !== 'SearsPartsDirect') continue;
-
     const pnMatch = String(it.part_number || '').match(/\d{7,}/);
     const pn = pnMatch ? pnMatch[0] : '';
-
     const missing = !it.image;
     const bad = it.image && BAD_SEARS_IMG.test(it.image);
-
     if (pn && (missing || bad)) {
       it.image = searsImageFromPN(pn);
     }
   }
 
-  // 2) Точечный догруз для Sears: если после шага (1) фото всё ещё нет — берём og:image с PDP
-  const needsPDP = clean.filter(
-    (it) => it.supplier === 'SearsPartsDirect' && !it.image && it.url
-  );
-
-  for (const it of needsPDP) {
-    try {
-      const html = await httpGet(it.url, {
-        Referer: 'https://www.searspartsdirect.com/'
-      });
-      const $ = cheerio.load(html);
-      const og = $('meta[property="og:image"]').attr('content') || '';
-      if (og) it.image = og;
-    } catch {
-      // тихо пропускаем, если не удалось
+  // 2) Sears: если картинка ПУСТАЯ ИЛИ это именно «наша, построенная по PN»,
+  //    делаем один запрос на PDP и берём og:image (фикс для случаев вроде 5304509458 -> 5304464097).
+  const toFetchPDP = [];
+  for (const it of clean) {
+    if (it.supplier !== 'SearsPartsDirect') continue;
+    if (!it.url) continue;
+    if (!it.image || BUILT_SEARS_PN_IMG.test(String(it.image))) {
+      toFetchPDP.push(it);
+      if (toFetchPDP.length >= 12) break; // ограничение на запросы
     }
   }
+
+  await Promise.allSettled(
+    toFetchPDP.map(async (it) => {
+      try {
+        const html = await httpGet(it.url, { Referer: 'https://www.searspartsdirect.com/' });
+        const $ = cheerio.load(html);
+        let og = $('meta[property="og:image"]').attr('content') || '';
+        if (og) {
+          og = normalizeSearsImage(og);
+          it.image = og;
+        }
+      } catch {
+        // тихо пропускаем
+      }
+    })
+  );
 
   // 3) Проксируем Sears/RC картинки через /api/img
   for (const it of clean) {
@@ -134,8 +157,6 @@ export async function aggregate(q) {
 
 async function fetchAndParse(src, q) {
   const url = src.searchUrl(q);
-  const html = await httpGet(url, {
-    Referer: url.split('/').slice(0, 3).join('/') + '/'
-  });
+  const html = await httpGet(url, { Referer: url.split('/').slice(0, 3).join('/') + '/' });
   return await src.parser(html, q);
 }
