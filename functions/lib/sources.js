@@ -57,22 +57,22 @@ export async function fromAppliancePartsPros(q){
   return items;
 }
 
-export async function fromPartSelect(q){
-  const url = `https://www.partselect.com/AdvancedSearch.aspx?SearchTerm=${encodeURIComponent(q)}`;
-  const html = await fetchHTML(url);
-  const $ = cheerio.load(html);
-  const items = [];
-  $('.product-list li, .product-list__item, .ps-product-tile').each((_,el)=>{
-    const name = $(el).text().trim().replace(/\s+/g,' ');
-    const a = $(el).find('a[href]').first();
-    let link = a.attr('href') || '';
-    if(link && link.startsWith('/')) link = 'https://www.partselect.com' + link;
-    const img = $(el).find('img').attr('src') || '';
-    const { price, currency } = money($(el).text());
-    items.push({ supplier:'PartSelect', name, url:link, image:img, price, currency, part_number:pn(name) });
-  });
-  return items;
-}
+//export async function fromPartSelect(q){
+  //const url = `https://www.partselect.com/AdvancedSearch.aspx?SearchTerm=${encodeURIComponent(q)}`;
+  //const html = await fetchHTML(url);
+  //const $ = cheerio.load(html);
+  //const items = [];
+  //$('.product-list li, .product-list__item, .ps-product-tile').each((_,el)=>{
+    //const name = $(el).text().trim().replace(/\s+/g,' ');
+    //const a = $(el).find('a[href]').first();
+    //let link = a.attr('href') || '';
+    //if(link && link.startsWith('/')) link = 'https://www.partselect.com' + link;
+    //const img = $(el).find('img').attr('src') || '';
+    //const { price, currency } = money($(el).text());
+    //items.push({ supplier:'PartSelect', name, url:link, image:img, price, currency, part_number:pn(name) });
+  //});
+  //return items;
+//}
 
 export async function fromSears(q){
   const url = `https://www.searspartsdirect.com/search?q=${encodeURIComponent(q)}`;
