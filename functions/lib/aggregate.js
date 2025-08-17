@@ -1,6 +1,13 @@
 import { sources } from './sources.js';
 import httpGet from './http_get.js';
 
+function searsImageFromPN(pn, {w=576,h=576,q=90,sharpen=3}={}){
+  pn = String(pn||'').trim();
+  if (!pn) return '';
+  // стандартный путь CDN Sears
+  return `https://s.sears.com/is/image/Sears/PD_0022_628_${pn}?f=webp&w=${w}&h=${h}&quality=${q}&sharpen=${sharpen}`;
+}
+
 export async function aggregate(q){
   const started = Date.now();
   const results = await Promise.allSettled(sources.map(s => fetchAndParse(s, q)));
@@ -14,7 +21,6 @@ export async function aggregate(q){
     if (r.status === 'fulfilled'){
       const arr = Array.isArray(r.value) ? r.value : [];
       meta.sources.push({ name, ok:true, count:arr.length });
-      // normalize поля
       arr.forEach(x => items.push({
         supplier: name,
         name: x.title || x.name || '',
@@ -40,6 +46,13 @@ export async function aggregate(q){
     seen.add(it.url);
     return true;
   });
+
+  // === ДОБАВЛЕНО: Fallback-картинки для Sears по PN (без сетевых запросов) ===
+  for (const it of clean){
+    if (!it.image && it.supplier === 'SearsPartsDirect' && it.part_number){
+      it.image = searsImageFromPN(it.part_number, { w: 285, h: 200, q: 90, sharpen: 2 });
+    }
+  }
 
   return { items: clean, meta };
 }
