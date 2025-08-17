@@ -217,7 +217,7 @@ export const sources = [
       // 4) Alternate search path if still empty
       if (!out.length && q){
         // tell aggregate to try alternate URL too by encoding in link to open
-        const alt = `${base}/Search?query=${encodeURIComponent(q)}`;
+        const alt = `${base}/Shop-For-Parts?query=${encodeURIComponent(q)}`;
         out.push({ title: `Открыть поиск RepairClinic: ${q}`, link: alt, image:'', source:'RepairClinic', part_number: partNumberFrom(q) });
       }
 
