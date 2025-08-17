@@ -98,6 +98,18 @@ function findAnyImageFromHtml(html, baseHost) {
   catch { return found; }
 }
 
+/* ---------- мапа «PN детали → PN картинки» (точечно) ---------- */
+/* У этих трёх карточек фото хранится под другим PN на CDN. */
+const SEARS_IMG_PN_REDIRECT = {
+  // Kenmore Elite Microwave Thermal Cut-off
+  '5304509475': '5304464094',
+  // Crosley Microwave Door Interlock Switch Lever
+  '5304509458': '5304464097',
+  // Kenmore Elite Microwave Door Interlock Switch
+  '5304509459': '5304464098'
+};
+/* ---------------------------------------------------------------- */
+
 /* ---------- main ---------- */
 
 export async function aggregate(q) {
@@ -152,7 +164,8 @@ export async function aggregate(q) {
     const missing = !it.image;
     const bad = it.image && BAD_SEARS_IMG.test(it.image);
     if (pn && (missing || bad)) {
-      it.image = searsImageFromPN(pn);
+      const imgPN = SEARS_IMG_PN_REDIRECT[pn] || pn; // ← ключевая правка
+      it.image = searsImageFromPN(imgPN);
     }
   }
 
@@ -168,7 +181,7 @@ export async function aggregate(q) {
     if (isRC && !it.image) {
       toFetchPDP.push(it);
     }
-    if (toFetchPDP.length >= 16) break; // лимит на PDP-запросы
+    if (toFetchPDP.length >= 16) break; // лимит на PDP-запросы — как в рабочем варианте
   }
 
   await Promise.allSettled(
@@ -197,7 +210,8 @@ export async function aggregate(q) {
 
   // 2c) Sears: если картинка "построенная из PN" и на CDN её нет — переключаемся на _Illustration
   async function checkSearsAndMaybeIllustration(it) {
-    const pn = (String(it.part_number || '').match(/\d{7,}/) || [])[0] || '';
+    const rawPN = (String(it.part_number || '').match(/\d{7,}/) || [])[0] || '';
+    const pn = SEARS_IMG_PN_REDIRECT[rawPN] || rawPN;   // ← учитываем редиректы PN картинок
     if (!pn) return;
     if (!BUILT_SEARS_PN_IMG.test(String(it.image || ''))) return;
     try {
