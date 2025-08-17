@@ -127,9 +127,11 @@ export const sources = [
   {
     name: 'SearsPartsDirect',
     searchUrl: (q) => `https://www.searspartsdirect.com/search?q=${encodeURIComponent(q)}`,
+
     parser: async (html) => {
       const $ = cheerio.load(html);
       const out = [];
+      // parts/products
       $('.part-card, .product-card, .card, [data-component="product-card"], a[href*="/part/"], a[href*="/product/"]').each((_,el)=>{
         const el$ = $(el);
         const a$ = el$.is('a') ? el$ : el$.find('a[href]').first();
@@ -145,27 +147,53 @@ export const sources = [
           oem_flag: detectOEM(title)
         });
       });
+
+      // models fallback — расширенный
       if (!out.length){
-        $('.card, .product-card, [data-component="product-card"]').each((_,el)=>{
+        const modelCards = $('.model-card, [data-component="model-card"], .card, .product-card');
+        modelCards.each((_,el)=>{
           const el$ = $(el);
-          const a$ = el$.find('a[href]').first();
-          const href = a$.attr('href') || '';
-          if (!/\/model\//i.test(href||'')) return;
-          let shop = '';
-          el$.find('a[href]').each((_,x)=>{
-            const t = textClean($(x).text()).toLowerCase();
-            const h = $(x).attr('href') || '';
-            if (/shop\s*parts/i.test(t) && h) shop = h;
+          let modelHref = '';
+          // любые ссылки на /model/
+          el$.find('a[href]').each((_,a)=>{
+            const h = $(a).attr('href') || '';
+            const t = textClean($(a).text()).toLowerCase();
+            if (/\/model\//i.test(h)) modelHref = modelHref || h;
+            if (/shop\s*parts/i.test(t) && h) modelHref = h; // приоритет Shop parts
           });
-          const link = absolutize(shop||href, 'https://www.searspartsdirect.com');
-          const title = textClean(el$.text());
+          if (!modelHref) return;
+          const link = absolutize(modelHref, 'https://www.searspartsdirect.com');
+          const title = firstNonEmpty(
+            el$.find('.card-title, .product-title, .model-title').text(),
+            el$.attr('aria-label'),
+            el$.text()
+          );
           const image = pickSearsThumb(el$);
-          out.push({ title, link, image, source:'SearsPartsDirect',
-            part_number: partNumberFrom(title),
-            availability: '',
-            oem_flag: detectOEM(title)
-          });
+          if (title && link){
+            out.push({ title: textClean(title), link, image, source:'SearsPartsDirect',
+              part_number: partNumberFrom(title),
+              availability: '',
+              oem_flag: detectOEM(title)
+            });
+          }
         });
+
+        // Ещё один пасс: прямые ссылки на /model/ вне карточек (например, списки результатов)
+        if (!out.length){
+          $('a[href*="/model/"]').each((_,a)=>{
+            const h = $(a).attr('href') || '';
+            const t = textClean($(a).text());
+            if (!h || !t) return;
+            const link = absolutize(h, 'https://www.searspartsdirect.com');
+            // пропустим тех, у кого текст слишком общий
+            if (/^learn more|view|details$/i.test(t)) return;
+            out.push({ title: t, link, image: '', source: 'SearsPartsDirect',
+              part_number: partNumberFrom(t),
+              availability: '',
+              oem_flag: detectOEM(t)
+            });
+          });
+        }
       }
       return out;
     }
