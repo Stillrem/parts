@@ -1,14 +1,15 @@
 {
-  "name": "parts-scraper",
+  "name": "parts-hub",
   "version": "1.0.0",
-  "main": "index.js",
   "type": "module",
+  "private": true,
+  "engines": { "node": ">=18" },
   "scripts": {
-    "start": "node index.js",
-    "build": "echo 'No build step'"
+    "build": "echo \"netlify functions build handled by esbuild\"",
+    "start": "echo \"Use Netlify to run functions\""
   },
   "dependencies": {
-    "axios": "^1.6.8",
+    "axios": "^1.7.2",
     "cheerio": "^1.0.0-rc.12"
   }
 }
