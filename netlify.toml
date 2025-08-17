@@ -1,7 +1,10 @@
-
 [build]
   publish = "site"
   functions = "functions"
 
 [functions]
   node_bundler = "esbuild"
+
+[dev]
+  framework = "#custom"
+  command = "npm run dev"
