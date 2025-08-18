@@ -1,55 +1,64 @@
 <!doctype html>
 <html lang="ru">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Поиск запчастей</title>
-  <link rel="stylesheet" href="/styles.css">
-</head>
-<body>
-  <header>
-    <h1>Поиск запчастей</h1>
-    <form id="searchForm">
-      <input id="q" type="text" placeholder="Модель или парт-номер (например 5304509451 / FFMV164LSA)" autocomplete="off">
-      <button type="submit">Искать</button>
-      <label class="inline">
-        Поставщик:
-        <select id="supplier">
-          <option value="">Все</option>
-          <option value="SearsPartsDirect">SearsPartsDirect</option>
-          <option value="RepairClinic">RepairClinic</option>
-        </select>
-      </label>
-      <label class="inline"><input type="checkbox" id="onlyOEM"> Только OEM</label>
-      <label class="inline"><input type="checkbox" id="onlyInStock"> Только в наличии</label>
-      <button type="button" id="exportBtn">Экспорт CSV</button>
-    </form>
-  </header>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Поиск запчастей</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Поиск запчастей</h1>
 
-  <main>
-    <div id="equivBox" class="hidden">
-      <div class="equiv-title">Эквиваленты:</div>
-      <div id="equivList"></div>
-    </div>
-    <div id="resultsGrid" class="grid"></div>
-  </main>
+      <form id="searchForm" class="controls">
+        <input id="q" type="text" placeholder="например: 5304509451 или модель" />
+        <button type="submit">Искать</button>
 
-  <template id="cardTmpl">
-    <article class="card">
-      <div class="thumb">
-        <img loading="lazy" alt="part image">
+        <label>Поставщик:
+          <select id="supplier">
+            <option value="">Все</option>
+            <option value="SearsPartsDirect">SearsPartsDirect</option>
+            <option value="RepairClinic">RepairClinic</option>
+          </select>
+        </label>
+
+        <label class="chk">
+          <input type="checkbox" id="onlyOEM" />
+          Только OEM
+        </label>
+
+        <label class="chk">
+          <input type="checkbox" id="onlyInStock" />
+          Только в наличии
+        </label>
+
+        <button type="button" id="exportBtn">Экспорт CSV</button>
+      </form>
+
+      <div id="equivBox" class="hidden">
+        <div class="equiv-title">Эквивалентные номера:</div>
+        <div id="equivList" class="equiv-list"></div>
       </div>
-      <div class="body">
-        <div class="title"></div>
+
+      <div id="resultsGrid" class="grid"></div>
+    </div>
+
+    <!-- Шаблон карточки -->
+    <template id="cardTmpl">
+      <div class="part-card">
+        <img class="part-image" src="" alt="" />
+        <div class="part-title title"></div>
+
+        <div class="details"></div>
+
         <div class="meta"></div>
         <div class="price"></div>
         <div class="compat"></div>
         <div class="chips"></div>
         <div class="links"></div>
       </div>
-    </article>
-  </template>
+    </template>
 
-  <script src="/app.js"></script>
-</body>
+    <script src="/app.js"></script>
+  </body>
 </html>
