@@ -5,6 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Parts Hub-Поиск запчастей</title>
   <link rel="stylesheet" href="/styles.css">
+
+  <!-- 🔹 PWA: manifest + цвета -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0f1318">
+
+  <!-- 🔹 iOS PWA support -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Parts Hub">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
 </head>
 <body>
   <header>
@@ -51,5 +61,16 @@
   </template>
 
   <script src="/app.js"></script>
+
+  <!-- 🔹 регистрация service worker -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(() => console.log('Service Worker зарегистрирован'))
+          .catch(err => console.log('Ошибка регистрации SW:', err));
+      });
+    }
+  </script>
 </body>
 </html>
