@@ -29,7 +29,8 @@ async function runSearch(q){
     lastRows = data.items || [];
     reRender();
     const pn = extractPartNumberFromQuery(q);
-    if (pn) renderEquivalents(lastRows, pn); else { equivBox.classList.add('hidden'); equivList.innerHTML=''; }
+    if (pn) renderEquivalents(lastRows, pn);
+    else { equivBox.classList.add('hidden'); equivList.innerHTML=''; }
   }catch(e){
     grid.innerHTML = '<div class="meta">Ошибка: '+(e.message||e)+'</div>';
   }
@@ -61,67 +62,67 @@ function renderGrid(rows){
   rows.forEach(r => {
     const node = tmpl.content.cloneNode(true);
     const img = node.querySelector('img');
-    const title = node.querySelector('.title');
-    const meta = node.querySelector('.meta');
+    const titleEl = node.querySelector('.title');
+    const metaEl = node.querySelector('.meta');
     const price = node.querySelector('.price');
     const compat = node.querySelector('.compat');
     const links = node.querySelector('.links');
     const chips = node.querySelector('.chips');
 
-    // картинка
+    // Картинка
     img.src = r.image || 'https://dummyimage.com/240x240/0f1318/2a3440&text=No+Image';
     img.alt = (r.name||r.part_number||'part') + ' image';
 
-    // заголовок: очищаем возможные хвосты "Part #..." и "— Previous part numbers: ..."
+    // Чистое имя в заголовок (убираем возможные старые хвосты)
     const cleanName = String(r.name||'')
       .replace(/\s*—\s*Previous part numbers:.*/i, '')
+      .replace(/\s*Previous part numbers:.*/i, '')
       .replace(/\s*Part\s*#\d{7,}.*/i, '')
       .trim();
-    title.textContent = cleanName || r.part_number || 'Part';
+    titleEl.textContent = cleanName || r.part_number || 'Part';
 
-    // блок под названием: Part #... + Previous part numbers (списком)
-    meta.innerHTML = buildPartBlock(r);
+    // ===== Блок Part / Previous part numbers в .meta =====
+    metaEl.innerHTML = buildPartBlock(r);
 
-    // цена / совместимость (как было)
+    // Цена / совместимость
     price.textContent = r.price ? (r.price + (r.currency ? ' '+r.currency : '')) : '';
     compat.textContent = r.compatibility ? ('Совместимость: '+r.compatibility) : '';
 
-    // ссылка-источник
+    // Ссылка-источник
     const a = document.createElement('a');
     a.href = r.url || '#';
     a.textContent = 'Источник';
     a.target = '_blank'; a.rel='noopener';
     links.appendChild(a);
 
-    // чипы
+    // Чипы: OEM, наличие, поставщик
     if ((r.oem_flag||'').toString().toLowerCase() === 'true') chips.appendChild(chip('OEM'));
     if (r.availability) chips.appendChild(chip(r.availability));
-    if (r.supplier) chips.appendChild(chip(r.supplier)); // чтобы не терять поставщика
+    if (r.supplier) chips.appendChild(chip(r.supplier));
 
     grid.appendChild(node);
   });
 }
 
-/** Формирует HTML-блок под названием:
+/** HTML для блока под заголовком:
  * Part #<current>
  * Previous part numbers
  * Part #<prev1>
- * Part #<prev2>
+ * Part #<prev2> ...
  */
 function buildPartBlock(r){
   const lines = [];
 
-  // текущий PN
-  // пробуем найти "голые" 7+ цифр, иначе выводим как есть
+  // Текущий PN — берём "голые" 7+ цифр, либо как есть
   const pnDigits = String(r.part_number||'').match(/\d{7,}/)?.[0] || (r.part_number||'');
   if (pnDigits) {
     lines.push(`<div>Part #${escapeHtml(pnDigits)}</div>`);
   }
 
-  // предыдущие PN (массив)
+  // Previous part numbers — массив previous_part_numbers (если бэкенд прислал)
   const prev = Array.isArray(r.previous_part_numbers) ? r.previous_part_numbers : [];
   if (prev.length){
-    lines.push(`<div>Previous part numbers</div>`);
+    lines.push('<div>Previous part numbers</div>');
     prev.forEach(p=>{
       const num = String(p).match(/\d{7,}/)?.[0] || String(p);
       lines.push(`<div>Part #${escapeHtml(num)}</div>`);
@@ -130,12 +131,18 @@ function buildPartBlock(r){
   return lines.join('');
 }
 
-function chip(text){ const el = document.createElement('span'); el.className='chip'; el.textContent = text; return el; }
+function chip(text){
+  const el = document.createElement('span');
+  el.className='chip';
+  el.textContent = text;
+  return el;
+}
 
 function extractPartNumberFromQuery(q){
   const m = String(q||'').match(/[A-Z0-9\-]{5,}/i);
   return m ? m[0].toUpperCase() : '';
 }
+
 function renderEquivalents(rows,inputPn){
   const set = new Set();
   rows.forEach(r => (r.equivalents||[]).forEach(x=> set.add(String(x).trim().toUpperCase())));
@@ -155,8 +162,11 @@ function exportCSV(){
   a.href = URL.createObjectURL(blob);
   a.download = 'parts.csv'; a.click();
 }
-function csvCell(v){ v = String(v).replace(/"/g,'""'); if (/[",\n]/.test(v)) return '"' + v + '"'; return v; }
-
+function csvCell(v){
+  v = String(v).replace(/"/g,'""');
+  if (/[",\n]/.test(v)) return '"' + v + '"';
+  return v;
+}
 function escapeHtml(s){
   return String(s)
     .replace(/&/g,'&amp;')
