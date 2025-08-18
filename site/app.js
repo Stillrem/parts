@@ -1,4 +1,3 @@
-// public/app.js
 const form = document.getElementById('searchForm');
 const grid = document.getElementById('resultsGrid');
 const supplierSel = document.getElementById('supplier');
@@ -52,78 +51,67 @@ function reRender(){
   renderGrid(rows);
 }
 
-// ---------- УСТОЙЧИВЫЙ рендер карточек (совместим со старым шаблоном) ----------
 function renderGrid(rows){
   if (!rows.length){
     grid.innerHTML = '<div class="meta">Ничего не найдено.</div>';
     return;
   }
-
   const tmpl = document.getElementById('cardTmpl');
   grid.innerHTML = '';
-
   rows.forEach(r => {
-    const frag = tmpl.content.cloneNode(true);
+    const node = tmpl.content.cloneNode(true);
+    const img = node.querySelector('img');
+    const title = node.querySelector('.title');
+    const meta = node.querySelector('.meta');
+    const price = node.querySelector('.price');
+    const compat = node.querySelector('.compat');
+    const links = node.querySelector('.links');
+    const chips = node.querySelector('.chips');
 
-    const img   = frag.querySelector('.part-card__img') || frag.querySelector('img');
-    const title = frag.querySelector('.title');
-    const meta  = frag.querySelector('.meta');
-    const price = frag.querySelector('.price');
-    const compat= frag.querySelector('.compat');
-    const links = frag.querySelector('.links');
-    const chips = frag.querySelector('.chips');
+    img.src = r.image || 'https://dummyimage.com/240x240/0f1318/2a3440&text=No+Image';
+    img.alt = (r.name||r.part_number||'part') + ' image';
 
-    // Создаём .desc, если его нет (чтобы выводить Part/Previous)
-    let desc = frag.querySelector('.desc');
-    if (!desc) {
-      desc = document.createElement('div');
-      desc.className = 'desc';
-      const body = frag.querySelector('.part-card__body') || frag.querySelector('.right') || frag;
-      const before = body.querySelector('.meta');
-      if (before) body.insertBefore(desc, before); else body.appendChild(desc);
-    }
+    // Заголовок — только имя, без "Part #..." и "Previous..."
+    title.textContent = String(r.name || r.part_number || 'Part')
+      .replace(/\s*—\s*Previous part numbers:.*/i, '')
+      .replace(/\s*Previous part numbers:.*/i, '')
+      .replace(/\s*Part\s*#\d{7,}.*/i, '')
+      .trim();
 
-    // Картинка
-    if (img) {
-      img.src = r.image || 'https://dummyimage.com/600x400/0f1318/2a3440&text=No+Image';
-      img.alt = (r.name||r.part_number||'part') + ' image';
-      img.loading = 'lazy';
-    }
+    // Метаданные: сначала текущий Part #, потом Previous part numbers (каждый на своей строке)
+    meta.innerHTML = buildMeta(r);
 
-    // Заголовок (name уже содержит текстовую часть)
-    if (title) title.textContent = r.name || r.part_number || 'Part';
+    price.textContent = r.price ? (r.price + (r.currency ? ' '+r.currency : '')) : '';
+    compat.textContent = r.compatibility ? ('Совместимость: '+r.compatibility) : '';
 
-    // Описание: Part # первым, затем Previous part numbers
-    const lines = [];
-    const pnDigits = (String(r.part_number||'').match(/\d{7,}/) || [])[0] || '';
-    if (pnDigits) lines.push(`<div>Part #${pnDigits}</div>`);
-    const prev = (r.previous_part_numbers || []).filter(Boolean);
-    if (prev.length) {
-      lines.push('<div class="prev-header">Previous part numbers</div>');
-      for (const p of prev) lines.push(`<div>Part #${p}</div>`);
-    }
-    desc.innerHTML = lines.join('');
+    const a = document.createElement('a');
+    a.href = r.url || '#';
+    a.textContent = 'Источник';
+    a.target = '_blank'; a.rel='noopener';
+    links.appendChild(a);
 
-    // Остальные поля
-    if (meta)   meta.textContent   = [r.supplier].filter(Boolean).join(' • ');
-    if (price)  price.textContent  = r.price ? (r.price + (r.currency ? ' '+r.currency : '')) : '';
-    if (compat) compat.textContent = r.compatibility ? ('Совместимость: '+r.compatibility) : '';
+    if ((r.oem_flag||'').toString().toLowerCase() === 'true') chips.appendChild(chip('OEM'));
+    if (r.availability) chips.appendChild(chip(r.availability));
+    if (r.supplier) chips.appendChild(chip(r.supplier)); // покажем поставщика отдельным чипом
 
-    if (links) {
-      const a = document.createElement('a');
-      a.href = r.url || '#';
-      a.textContent = 'Источник';
-      a.target = '_blank'; a.rel='noopener';
-      links.appendChild(a);
-    }
-
-    if (chips) {
-      if ((r.oem_flag||'').toString().toLowerCase() === 'true') chips.appendChild(chip('OEM'));
-      if (r.availability) chips.appendChild(chip(r.availability));
-    }
-
-    grid.appendChild(frag);
+    grid.appendChild(node);
   });
+}
+
+function buildMeta(r){
+  const lines = [];
+  const curr = (String(r.part_number||'').match(/\d{7,}/)||[])[0] || (r.part_number||'');
+  if (curr) lines.push(`<div>Part #${escapeHtml(curr)}</div>`);
+
+  const prev = Array.isArray(r.previous_part_numbers) ? r.previous_part_numbers : [];
+  if (prev.length){
+    lines.push('<div>Previous part numbers</div>');
+    prev.forEach(p=>{
+      const num = (String(p).match(/\d{7,}/)||[])[0] || String(p);
+      lines.push(`<div>Part #${escapeHtml(num)}</div>`);
+    });
+  }
+  return lines.join('');
 }
 
 function chip(text){ const el = document.createElement('span'); el.className='chip'; el.textContent = text; return el; }
@@ -152,3 +140,12 @@ function exportCSV(){
   a.download = 'parts.csv'; a.click();
 }
 function csvCell(v){ v = String(v).replace(/"/g,'""'); if (/[",\n]/.test(v)) return '"' + v + '"'; return v; }
+
+function escapeHtml(s){
+  return String(s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}

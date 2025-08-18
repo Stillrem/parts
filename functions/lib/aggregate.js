@@ -45,7 +45,9 @@ function normalizeSearsImage(u) {
       return url.toString();
     }
     return u;
-  } catch { return u; }
+  } catch {
+    return u;
+  }
 }
 
 // Нормализация картинок RepairClinic (относительные → абсолютные)
@@ -97,11 +99,14 @@ function findAnyImageFromHtml(html, baseHost) {
 }
 
 /* ---------- мапа «PN детали → PN картинки» (точечно) ---------- */
-/* У этих трёх карточек фото на CDN хранится под другим PN. */
+/* У этих трёх карточек фото хранится под другим PN на CDN. */
 const SEARS_IMG_PN_REDIRECT = {
-  '5304509475': '5304464094', // Kenmore Elite Microwave Thermal Cut-off
-  '5304509458': '5304464097', // Crosley Microwave Door Interlock Switch Lever
-  '5304509459': '5304464098'  // Kenmore Elite Microwave Door Interlock Switch
+  // Kenmore Elite Microwave Thermal Cut-off
+  '5304509475': '5304464094',
+  // Crosley Microwave Door Interlock Switch Lever
+  '5304509458': '5304464097',
+  // Kenmore Elite Microwave Door Interlock Switch
+  '5304509459': '5304464098'
 };
 /* ---------------------------------------------------------------- */
 
@@ -109,7 +114,7 @@ const SEARS_IMG_PN_REDIRECT = {
 function extractPrevNumbersFromSears(html, currentPN) {
   const $ = cheerio.load(html);
 
-  // найти элемент с текстом "Previous part numbers"
+  // найти элемент с текстом "Previous part numbers" (независимо от тега/классов)
   let $hdr = $('*:contains("Previous part numbers")').filter((_, el) =>
     $(el).text().trim().toLowerCase() === 'previous part numbers'
   ).first();
@@ -171,6 +176,9 @@ export async function aggregate(q) {
           part_number: x.part_number || '',
           availability: x.availability || '',
           oem_flag: x.oem_flag || false,
+
+          // 👇 добавили готовую подпись для фронта
+          part_label: x.part_number ? `Part #${x.part_number}` : ''
         });
       }
     } else {
@@ -216,7 +224,7 @@ export async function aggregate(q) {
     if (isRC && !it.image) {
       toFetchPDP.push(it);
     }
-    if (toFetchPDP.length >= 16) break;
+    if (toFetchPDP.length >= 16) break; // лимит на PDP-запросы — как в рабочем варианте
   }
 
   await Promise.allSettled(
@@ -238,20 +246,30 @@ export async function aggregate(q) {
           it.image = img;
         }
 
-        // Previous part numbers — только из их блока
+        // === Previous part numbers: забираем только из их блока на PDP Sears ===
         if (it.supplier === 'SearsPartsDirect') {
           const currentPN = (String(it.part_number || '').match(/\d{7,}/) || [])[0] || '';
           const prev = extractPrevNumbersFromSears(html, currentPN);
-          if (prev.length) it.previous_part_numbers = prev;
+          if (prev.length) {
+            // можно сохранить как отдельное поле, если нужно на фронте
+            it.previous_part_numbers = prev;
+
+            // *опционально* допишем к имени короткую подпись (не мешает разметке)
+            if (!/previous part numbers/i.test(it.name || '')) {
+              it.name = `${it.name} — Previous part numbers: ${prev.map(p => `#${p}`).join(', ')}`;
+            }
+          }
         }
-      } catch { /* пропускаем */ }
+      } catch {
+        // пропускаем
+      }
     })
   );
 
-  // 2c) Если на CDN нет «основной» картинки — используем _Illustration
+  // 2c) Sears: если картинка "построенная из PN" и на CDN её нет — переключаемся на _Illustration
   async function checkSearsAndMaybeIllustration(it) {
     const rawPN = (String(it.part_number || '').match(/\d{7,}/) || [])[0] || '';
-    const pn = SEARS_IMG_PN_REDIRECT[rawPN] || rawPN;
+    const pn = SEARS_IMG_PN_REDIRECT[rawPN] || rawPN;   // учитываем редиректы PN картинок
     if (!pn) return;
     if (!BUILT_SEARS_PN_IMG.test(String(it.image || ''))) return;
     try {
@@ -275,12 +293,12 @@ export async function aggregate(q) {
     await Promise.allSettled(candidates.map(checkSearsAndMaybeIllustration));
   }
 
-  // 3) Проксируем изображения
+  // 3) Проксируем Sears/RC картинки через /api/img
   for (const it of clean) {
     if (it.image) it.image = proxyImage(it.image);
   }
 
-  // 4) Подстраховка: если в name ещё нет "Part #", допишем его в конец
+  // 4) Подстраховка: если в name ещё нет "Part #", аккуратно допишем его
   for (const it of clean) {
     const pnDigits = (String(it.part_number || '').match(/\d{7,}/) || [])[0] || '';
     if (pnDigits && !/Part\s*#\d{7,}/i.test(it.name || '')) {

@@ -1,100 +1,25 @@
-/* ===== ТЁМНЫЕ КАРТОЧКИ. КАРТИНКА СВЕРХУ ===== */
-.part-card {
-  background: #12161c;
-  border: 1px solid #1f2732;
-  border-radius: 12px;
-  box-shadow: 0 4px 10px rgba(0,0,0,.35);
-  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
-}
+:root { --bg:#0b0d10; --fg:#eaeef2; --muted:#aab3bd; --card:#12161b; --chip:#24303c; --accent:#4aa3ff; }
+*{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial,sans-serif;background:var(--bg);color:var(--fg)}
+header{padding:16px 20px;border-bottom:1px solid #1d232b}
+h1{margin:0 0 10px 0;font-size:20px}
+form{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+#q{flex:1 1 320px;padding:10px 12px;border-radius:8px;border:1px solid #2a3440;background:#0f1318;color:var(--fg)}
+button, select{padding:10px 12px;border-radius:8px;border:1px solid #2a3440;background:#131922;color:var(--fg);cursor:pointer}
+button:hover, select:hover{border-color:#3a4757}
+.inline{display:flex;gap:8px;align-items:center}
 
-.part-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 16px rgba(0,0,0,.45);
-  border-color: #2b3746;
-}
-
-.part-card--vertical {
-  display: flex;
-  flex-direction: column;     /* ← вертикально */
-  padding: 12px;
-}
-
-/* Блок с изображением */
-.part-card__imgwrap {
-  width: 100%;
-  height: 180px;              /* при желании подними/опусти */
-  background: #0d1117;
-  border-radius: 8px;
-  overflow: hidden;
-  margin-bottom: 12px;
-}
-
-.part-card__img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;        /* чтобы не обрезать */
-  display: block;
-}
-
-/* Контент */
-.part-card__body {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.title {
-  color: #ffffff;
-  font-weight: 700;
-  font-size: 16px;
-  line-height: 1.25;
-}
-
-.meta {
-  color: #a9b6c7;
-  font-size: 12px;
-}
-
-.price {
-  color: #e6f3ff;
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.compat {
-  color: #93a3b5;
-  font-size: 12px;
-}
-
-/* Наш блок описания: Part # и Previous part numbers */
-.desc {
-  color: #d7e3f0;
-  font-size: 13px;
-  line-height: 1.35;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.desc .prev-header {
-  color: #9fb3c9;
-  margin-top: 4px;
-}
-
-/* чипы и ссылка-источник — тёмная тема */
-.chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip  {
-  background: #223042;
-  color: #d7e3f0;
-  border: 1px solid #2f4156;
-  border-radius: 999px;
-  padding: 2px 8px;
-  font-size: 12px;
-}
-
-.links a {
-  color: #65a9ff;
-  text-decoration: none;
-  font-weight: 600;
-}
-.links a:hover { text-decoration: underline; }
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;padding:16px}
+.card{display:flex;gap:10px;background:var(--card);border:1px solid #1d232b;border-radius:12px;overflow:hidden}
+.thumb{width:120px;min-height:120px;background:#0f1318;display:flex;align-items:center;justify-content:center}
+.thumb img{width:100%;height:auto;display:block}
+.body{padding:12px;display:flex;flex-direction:column;gap:6px}
+.title{font-weight:600;font-size:15px}
+.meta{color:var(--muted);font-size:12px}
+.price{color:#8ae389;font-weight:600}
+.links a{color:var(--accent);text-decoration:none;margin-right:10px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{background:var(--chip);color:#cfe0f5;border-radius:999px;padding:3px 8px;font-size:11px}
+.meta, .compat {font-size:12px}
+.hidden{display:none}
+.equiv-title{padding:0 16px;font-size:12px;color:var(--muted)}
+#equivList{padding:8px 16px;display:flex;gap:6px;flex-wrap:wrap}
