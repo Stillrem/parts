@@ -1,64 +1,26 @@
-<!doctype html>
-<html lang="ru">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Поиск запчастей</title>
-    <link rel="stylesheet" href="/style.css" />
-  </head>
-  <body>
-    <div class="wrap">
-      <h1>Поиск запчастей</h1>
+<!-- ... остальная верстка твоей страницы ... -->
 
-      <form id="searchForm" class="controls">
-        <input id="q" type="text" placeholder="например: 5304509451 или модель" />
-        <button type="submit">Искать</button>
-
-        <label>Поставщик:
-          <select id="supplier">
-            <option value="">Все</option>
-            <option value="SearsPartsDirect">SearsPartsDirect</option>
-            <option value="RepairClinic">RepairClinic</option>
-          </select>
-        </label>
-
-        <label class="chk">
-          <input type="checkbox" id="onlyOEM" />
-          Только OEM
-        </label>
-
-        <label class="chk">
-          <input type="checkbox" id="onlyInStock" />
-          Только в наличии
-        </label>
-
-        <button type="button" id="exportBtn">Экспорт CSV</button>
-      </form>
-
-      <div id="equivBox" class="hidden">
-        <div class="equiv-title">Эквивалентные номера:</div>
-        <div id="equivList" class="equiv-list"></div>
-      </div>
-
-      <div id="resultsGrid" class="grid"></div>
+<template id="cardTmpl">
+  <article class="part-card part-card--vertical">
+    <div class="part-card__imgwrap">
+      <img class="part-card__img" alt="" />
     </div>
 
-    <!-- Шаблон карточки -->
-    <template id="cardTmpl">
-      <div class="part-card">
-        <img class="part-image" src="" alt="" />
-        <div class="part-title title"></div>
+    <div class="part-card__body">
+      <div class="title"></div>
 
-        <div class="details"></div>
+      <!-- описание под заголовком: Part # и Previous part numbers -->
+      <div class="desc"></div>
 
-        <div class="meta"></div>
-        <div class="price"></div>
-        <div class="compat"></div>
-        <div class="chips"></div>
-        <div class="links"></div>
-      </div>
-    </template>
+      <!-- как и раньше -->
+      <div class="meta"></div>
+      <div class="price"></div>
+      <div class="compat"></div>
 
-    <script src="/app.js"></script>
-  </body>
-</html>
+      <div class="chips"></div>
+      <div class="links"></div>
+    </div>
+  </article>
+</template>
+
+<!-- ... остальная верстка твоей страницы ... -->
