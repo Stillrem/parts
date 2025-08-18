@@ -45,9 +45,7 @@ function normalizeSearsImage(u) {
       return url.toString();
     }
     return u;
-  } catch {
-    return u;
-  }
+  } catch { return u; }
 }
 
 // Нормализация картинок RepairClinic (относительные → абсолютные)
@@ -70,7 +68,7 @@ function proxyImage(u) {
 // «Наша» PN-картинка (чтобы понять, что нужно перепроверить на PDP/HEAD)
 const BUILT_SEARS_PN_IMG = /https?:\/\/s\.sears\.com\/is\/image\/Sears\/PD_0022_628_\d+\b/i;
 
-// Универсальный поиск картинки в HTML: og:image -> img/source -> Sears PN в тексте
+// Универсальный поиск картинки в HTML
 function findAnyImageFromHtml(html, baseHost) {
   const $ = cheerio.load(html);
   let found = $('meta[property="og:image"],meta[name="og:image"]').attr('content') || '';
@@ -85,12 +83,9 @@ function findAnyImageFromHtml(html, baseHost) {
     });
   }
 
-  // последний шанс: PN Sears в теле HTML
   if (!found) {
     const m = String(html).match(/https?:\/\/s\.sears\.com\/is\/image\/Sears\/PD_0022_628_(\d{7,})/i);
-    if (m && m[1]) {
-      found = searsImageFromPN(m[1]);
-    }
+    if (m && m[1]) found = searsImageFromPN(m[1]);
   }
 
   if (!found) return '';
@@ -110,17 +105,12 @@ const SEARS_IMG_PN_REDIRECT = {
 function extractPrevNumbersFromSears(html, currentPN) {
   const $ = cheerio.load(html);
 
-  // найти элемент с текстом "Previous part numbers"
   let $hdr = $('*:contains("Previous part numbers")').filter((_, el) =>
     $(el).text().trim().toLowerCase() === 'previous part numbers'
   ).first();
   if (!$hdr.length) return [];
 
-  const containers = [
-    $hdr.next(),
-    $hdr.parent(),
-    $hdr.parent().next(),
-  ].filter(x => x && x.length);
+  const containers = [$hdr.next(), $hdr.parent(), $hdr.parent().next()].filter(Boolean);
 
   let textBlock = '';
   for (const $c of containers) {
@@ -144,20 +134,29 @@ function extractPrevNumbersFromSears(html, currentPN) {
   return Array.from(set);
 }
 
-/* ---------- Sears: извлечь заголовок модели («Model # ...») ---------- */
+/* ---------- Sears: заголовок модели («Model # ...») ---------- */
 function extractSearsModelTitle(html) {
   const $ = cheerio.load(html);
-  // Ищем любой элемент, где встречается «Model #»
-  const cand = $('h1, h2, div, span, p')
-    .filter((_, el) => /Model\s*#\s*/i.test($(el).text()))
-    .first();
 
-  if (!cand.length) return '';
+  // 1) Берём только H1/H2 и ищем в них “Model # …”
+  let title = '';
+  $('h1, h2').each((_, el) => {
+    const t = $(el).text().replace(/\s+/g, ' ').trim();
+    if (/Model\s*#\s*[A-Z0-9\-]+/i.test(t) && t.length < 140) {
+      title = t;
+      return false; // break
+    }
+  });
+  if (title) {
+    return title.replace(/\bOfficial\b/ig, '').replace(/\s{2,}/g, ' ').trim();
+  }
 
-  let txt = cand.text().replace(/\s+Official\s+/i, ' ').trim();
-  // Нормализуем множественные пробелы
-  txt = txt.replace(/\s{2,}/g, ' ').trim();
-  return txt;
+  // 2) fallback: строго H1 c “Model #”
+  const m = String(html).match(/<h1[^>]*>\s*([^<]*Model\s*#\s*[^<]+?)\s*<\/h1>/i);
+  if (m && m[1]) {
+    return m[1].replace(/\bOfficial\b/ig, '').replace(/\s{2,}/g, ' ').trim();
+  }
+  return '';
 }
 
 /* ---------- main ---------- */
@@ -227,8 +226,6 @@ export async function aggregate(q) {
     const isSears = it.supplier === 'SearsPartsDirect';
     const isRC    = it.supplier === 'RepairClinic';
 
-    // Было: идём только если нет картинки / картинка «наша».
-    // Стало: для Sears также идём, если нет числового PN (модельные страницы).
     const hasNumericPN = /\d{7,}/.test(String(it.part_number || ''));
     if (isSears && ( !it.image || BUILT_SEARS_PN_IMG.test(String(it.image)) || !hasNumericPN )) {
       toFetchPDP.push(it);
@@ -236,7 +233,7 @@ export async function aggregate(q) {
     if (isRC && !it.image) {
       toFetchPDP.push(it);
     }
-    if (toFetchPDP.length >= 30) break; // лимит, как у тебя
+    if (toFetchPDP.length >= 30) break;
   }
 
   await Promise.allSettled(
