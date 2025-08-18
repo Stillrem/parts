@@ -68,24 +68,66 @@ function renderGrid(rows){
     const links = node.querySelector('.links');
     const chips = node.querySelector('.chips');
 
+    // картинка
     img.src = r.image || 'https://dummyimage.com/240x240/0f1318/2a3440&text=No+Image';
     img.alt = (r.name||r.part_number||'part') + ' image';
-    title.textContent = r.name || r.part_number || 'Part';
-    meta.textContent = [r.supplier].filter(Boolean).join(' • ');
+
+    // заголовок: очищаем возможные хвосты "Part #..." и "— Previous part numbers: ..."
+    const cleanName = String(r.name||'')
+      .replace(/\s*—\s*Previous part numbers:.*/i, '')
+      .replace(/\s*Part\s*#\d{7,}.*/i, '')
+      .trim();
+    title.textContent = cleanName || r.part_number || 'Part';
+
+    // блок под названием: Part #... + Previous part numbers (списком)
+    meta.innerHTML = buildPartBlock(r);
+
+    // цена / совместимость (как было)
     price.textContent = r.price ? (r.price + (r.currency ? ' '+r.currency : '')) : '';
     compat.textContent = r.compatibility ? ('Совместимость: '+r.compatibility) : '';
 
+    // ссылка-источник
     const a = document.createElement('a');
     a.href = r.url || '#';
     a.textContent = 'Источник';
     a.target = '_blank'; a.rel='noopener';
     links.appendChild(a);
 
+    // чипы
     if ((r.oem_flag||'').toString().toLowerCase() === 'true') chips.appendChild(chip('OEM'));
     if (r.availability) chips.appendChild(chip(r.availability));
+    if (r.supplier) chips.appendChild(chip(r.supplier)); // чтобы не терять поставщика
 
     grid.appendChild(node);
   });
+}
+
+/** Формирует HTML-блок под названием:
+ * Part #<current>
+ * Previous part numbers
+ * Part #<prev1>
+ * Part #<prev2>
+ */
+function buildPartBlock(r){
+  const lines = [];
+
+  // текущий PN
+  // пробуем найти "голые" 7+ цифр, иначе выводим как есть
+  const pnDigits = String(r.part_number||'').match(/\d{7,}/)?.[0] || (r.part_number||'');
+  if (pnDigits) {
+    lines.push(`<div>Part #${escapeHtml(pnDigits)}</div>`);
+  }
+
+  // предыдущие PN (массив)
+  const prev = Array.isArray(r.previous_part_numbers) ? r.previous_part_numbers : [];
+  if (prev.length){
+    lines.push(`<div>Previous part numbers</div>`);
+    prev.forEach(p=>{
+      const num = String(p).match(/\d{7,}/)?.[0] || String(p);
+      lines.push(`<div>Part #${escapeHtml(num)}</div>`);
+    });
+  }
+  return lines.join('');
 }
 
 function chip(text){ const el = document.createElement('span'); el.className='chip'; el.textContent = text; return el; }
@@ -114,3 +156,12 @@ function exportCSV(){
   a.download = 'parts.csv'; a.click();
 }
 function csvCell(v){ v = String(v).replace(/"/g,'""'); if (/[",\n]/.test(v)) return '"' + v + '"'; return v; }
+
+function escapeHtml(s){
+  return String(s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
