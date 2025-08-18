@@ -287,7 +287,7 @@ export async function aggregate(q) {
     for (const it of clean) {
       if (it.supplier === 'SearsPartsDirect' && BUILT_SEARS_PN_IMG.test(String(it.image || ''))) {
         candidates.push(it);
-        if (candidates.length >= 16) break;
+        if (candidates.length >= 30) break;
       }
     }
     await Promise.allSettled(candidates.map(checkSearsAndMaybeIllustration));
