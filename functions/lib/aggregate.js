@@ -3,7 +3,7 @@ import { sources } from './sources.js';
 import httpGet from './http_get.js';
 import * as cheerio from 'cheerio';
 
-/* ---------- helpers ---------- */
+/* ---------- helpers (картинки) ---------- */
 
 // JPEG для Sears по PN (Scene7/Adobe)
 function searsImageFromPN(
@@ -15,7 +15,7 @@ function searsImageFromPN(
   return `https://s.sears.com/is/image/Sears/PD_0022_628_${pn}?wid=${wid}&hei=${hei}&fmt=pjpg&qlt=${qlt}&op_sharpen=${sharpen}`;
 }
 
-// Иллюстрация Sears по PN (когда основного фото нет)
+// Иллюстрация Sears по PN (когда обычного фото нет)
 function searsIllustrationFromPN(
   pn,
   { wid = 285, hei = 200, qlt = 90, sharpen = 2 } = {}
@@ -45,9 +45,7 @@ function normalizeSearsImage(u) {
       return url.toString();
     }
     return u;
-  } catch {
-    return u;
-  }
+  } catch { return u; }
 }
 
 // Нормализация картинок RepairClinic (относительные → абсолютные)
@@ -56,28 +54,21 @@ function normalizeRCImage(u) {
   catch { return u; }
 }
 
-// Прокси изображений через свой домен
+// Прокси изображений через свой домен (чтобы не блочились)
 function proxyImage(u) {
   if (!u) return '';
   if (u.startsWith('/api/img?u=')) return u; // уже проксировано
   let host = '';
   try { host = new URL(u).hostname; } catch { return u; }
-  const ALLOW = new Set([
-    's.sears.com',
-    'www.repairclinic.com',
-    'rcappliancepartsimages.com',
-    // иногда у Sears попадаются запасные CDN-хосты:
-    'images.searspartsdirect.com',
-    'c.shld.net'
-  ]);
+  const ALLOW = new Set(['s.sears.com','www.repairclinic.com','rcappliancepartsimages.com']);
   if (!ALLOW.has(host)) return u;
   return `/api/img?u=${encodeURIComponent(u)}`;
 }
 
-// «Наша» PN-картинка (чтобы понять, что нужно перепроверить на PDP/HEAD)
+// «Наша» PN-картинка (чтобы понять, что она построена из PN, а не реальная)
 const BUILT_SEARS_PN_IMG = /https?:\/\/s\.sears\.com\/is\/image\/Sears\/PD_0022_628_\d+\b/i;
 
-// Универсальный поиск картинки в HTML: og:image -> img/source -> Sears PN в тексте
+// Универсальный поиск картинки в HTML: og:image -> img/source -> PN Sears
 function findAnyImageFromHtml(html, baseHost) {
   const $ = cheerio.load(html);
   let found = $('meta[property="og:image"],meta[name="og:image"]').attr('content') || '';
@@ -92,12 +83,9 @@ function findAnyImageFromHtml(html, baseHost) {
     });
   }
 
-  // последний шанс: PN Sears в теле HTML
   if (!found) {
     const m = String(html).match(/https?:\/\/s\.sears\.com\/is\/image\/Sears\/PD_0022_628_(\d{7,})/i);
-    if (m && m[1]) {
-      found = searsImageFromPN(m[1]);
-    }
+    if (m && m[1]) found = searsImageFromPN(m[1]);
   }
 
   if (!found) return '';
@@ -105,19 +93,33 @@ function findAnyImageFromHtml(html, baseHost) {
   catch { return found; }
 }
 
-// Из «Previous part numbers» берём только номера из соответствующего блока
-function extractPrevPartNumbersFromSears(html) {
-  const out = new Set();
-  const idx = html.indexOf('Previous part numbers');
-  if (idx < 0) return [];
-  // берём «окно» после заголовка (достаточно 3–6 KB)
-  const slice = html.slice(idx, idx + 6000);
-  const rx = /Part\s*#\s*(\d{7,})/ig;
+/* ---------- helpers (previous part numbers) ---------- */
+
+// Ищем «Previous part numbers» ТОЛЬКО в соответствующем блоке.
+// Никаких «Frequently bought together» и т.п.
+function extractPrevNumbersFromSears(html, currentPN) {
+  const $ = cheerio.load(html);
+
+  // На странице заголовок блока всегда именно такой
+  const header = $('div.tw-text-2md.tw-font-semibold').filter((_, el) => {
+    return $(el).text().trim().toLowerCase() === 'previous part numbers';
+  }).first();
+
+  if (!header.length) return [];
+
+  // Блок со списком — ближайший следующий контейнер
+  const container = header.parent();
+  const text = container.text();
+
+  // Забираем только «Part #ddddddd» из этого блока
+  const rx = /Part\s*#\s*(\d{7,})/gi;
+  const set = new Set();
   let m;
-  while ((m = rx.exec(slice))) {
-    out.add(m[1]);
+  while ((m = rx.exec(text))) {
+    const pn = m[1];
+    if (pn && pn !== currentPN) set.add(pn);
   }
-  return Array.from(out);
+  return Array.from(set);
 }
 
 /* ---------- main ---------- */
@@ -146,7 +148,8 @@ export async function aggregate(q) {
           part_number: x.part_number || '',
           availability: x.availability || '',
           oem_flag: x.oem_flag || false,
-          _prevPNs: [] // заполним позже при PDP-догрузке (для Sears)
+          // добавим поле для «предыдущих» PN — пока пустое
+          prev_numbers: Array.isArray(x.prev_numbers) ? x.prev_numbers : []
         });
       }
     } else {
@@ -164,7 +167,7 @@ export async function aggregate(q) {
     return true;
   });
 
-  /* ---------- постобработка изображений ---------- */
+  /* ---------- постобработка изображений (как в «рабочем» билде) ---------- */
 
   // 1) Sears: если нет картинки ИЛИ она «словесная» — строим по PN
   const BAD_SEARS_IMG = /PD_0022_628_(KENMORE|CROSLEY|MICROWAVE|WHITE-WESTINGHOUSE|LATCH)\b/i;
@@ -179,7 +182,8 @@ export async function aggregate(q) {
     }
   }
 
-  // 2) Догруз с PDP для Sears и RepairClinic
+  // 2) Догруз с PDP для Sears и RepairClinic (если пусто или «наша по PN»)
+  const MAX_PDP = 16; // консервативно (как было стабильно)
   const toFetchPDP = [];
   for (const it of clean) {
     if (!it.url) continue;
@@ -191,7 +195,7 @@ export async function aggregate(q) {
     if (isRC && !it.image) {
       toFetchPDP.push(it);
     }
-    if (toFetchPDP.length >= 16) break; // лимит на PDP-запросы
+    if (toFetchPDP.length >= MAX_PDP) break;
   }
 
   await Promise.allSettled(
@@ -205,21 +209,19 @@ export async function aggregate(q) {
         });
 
         const host = new URL(it.url).hostname;
+        let img = findAnyImageFromHtml(html, host);
 
-        // картинка с PDP: используем ТОЛЬКО если у нас её ещё нет
-        if (!it.image) {
-          let img = findAnyImageFromHtml(html, host);
-          if (img) {
-            if (host.includes('searspartsdirect.com')) img = normalizeSearsImage(img);
-            if (host.includes('repairclinic.com'))      img = normalizeRCImage(img);
-            it.image = img;
-          }
+        if (img) {
+          if (host.includes('searspartsdirect.com')) img = normalizeSearsImage(img);
+          if (host.includes('repairclinic.com'))      img = normalizeRCImage(img);
+          it.image = img;
         }
 
-        // «Previous part numbers» — только для Sears
-        if (host.includes('searspartsdirect.com')) {
-          const prev = extractPrevPartNumbersFromSears(html);
-          if (prev.length) it._prevPNs = prev;
+        // === Новое: достаём Previous part numbers строго из их секции ===
+        if (it.supplier === 'SearsPartsDirect') {
+          const currentPN = (String(it.part_number || '').match(/\d{7,}/) || [])[0] || '';
+          const prev = extractPrevNumbersFromSears(html, currentPN);
+          if (prev.length) it.prev_numbers = prev;
         }
       } catch {
         // пропускаем
@@ -227,49 +229,42 @@ export async function aggregate(q) {
     })
   );
 
-  // 2c) Sears: если картинка «по PN», но на CDN ее нет — переключаемся на _Illustration
-  async function checkSearsAndMaybeIllustration(it) {
-    const pn = (String(it.part_number || '').match(/\d{7,}/) || [])[0] || '';
-    if (!pn) return;
-    if (!BUILT_SEARS_PN_IMG.test(String(it.image || ''))) return;
-    try {
-      const testUrl = searsImageFromPN(pn, { wid: 285, hei: 200, qlt: 90, sharpen: 2 });
-      const resp = await fetch(testUrl, { method: 'HEAD' });
-      if (!resp.ok) {
-        it.image = searsIllustrationFromPN(pn, { wid: 285, hei: 200, qlt: 90, sharpen: 2 });
-      }
-    } catch {
-      it.image = searsIllustrationFromPN(pn, { wid: 285, hei: 200, qlt: 90, sharpen: 2 });
-    }
-  }
-  {
-    const candidates = [];
-    for (const it of clean) {
-      if (it.supplier === 'SearsPartsDirect' && BUILT_SEARS_PN_IMG.test(String(it.image || ''))) {
-        candidates.push(it);
-        if (candidates.length >= 16) break;
-      }
-    }
-    await Promise.allSettled(candidates.map(checkSearsAndMaybeIllustration));
-  }
-
-  // 3) Добавим в name: "Part #…" + "Previous part numbers: …"
+  // 2b) Если осталась «наша PN-картинка», а на CDN её нет — ставим _Illustration
   for (const it of clean) {
+    if (it.supplier !== 'SearsPartsDirect') continue;
+    if (!BUILT_SEARS_PN_IMG.test(String(it.image || ''))) continue;
     const pn = (String(it.part_number || '').match(/\d{7,}/) || [])[0] || '';
-    const baseTitle = String(it.name || '').replace(/\s+Part\s*#\d{7,}.*/i, '').trim();
-    let suffix = '';
-    if (pn) suffix += ` Part #${pn}`;
-    if (it._prevPNs && it._prevPNs.length) {
-      const list = it._prevPNs.slice(0, 6).map(x => `#${x}`).join(', ');
-      suffix += ` — Previous part numbers: ${list}`;
+    if (!pn) continue;
+    try {
+      const testUrl = searsImageFromPN(pn);
+      const resp = await fetch(testUrl, { method: 'HEAD' });
+      if (!resp.ok) it.image = searsIllustrationFromPN(pn);
+    } catch {
+      it.image = searsIllustrationFromPN(pn);
     }
-    it.name = (baseTitle + (suffix ? ` ${suffix}` : '')).trim();
-    delete it._prevPNs;
   }
 
-  // 4) Проксируем Sears/RC картинки через /api/img
+  // 3) Проксируем Sears/RC картинки через /api/img (как было)
   for (const it of clean) {
     if (it.image) it.image = proxyImage(it.image);
+
+    // Добавим «Previous part numbers» в заголовок КРАСИВО, если они есть
+    if (it.prev_numbers?.length) {
+      const pn = (String(it.part_number || '').match(/\d{7,}/) || [])[0] || '';
+      const prevText = ' — Previous part numbers: ' + it.prev_numbers.map(x => `#${x}`).join(', ');
+      // показываем Part #текущий сразу после названия, prev — после тире
+      if (pn && !/Part\s*#\d{7,}/i.test(it.name)) {
+        it.name = `${it.name} Part #${pn}${prevText}`;
+      } else {
+        it.name = `${it.name}${prevText}`;
+      }
+    } else {
+      // хотя бы текущий Part # аккуратно добавим, если его нет в названии
+      const pn = (String(it.part_number || '').match(/\d{7,}/) || [])[0] || '';
+      if (pn && it.name && !/Part\s*#\d{7,}/i.test(it.name)) {
+        it.name = `${it.name} Part #${pn}`;
+      }
+    }
   }
 
   return { items: clean, meta };
