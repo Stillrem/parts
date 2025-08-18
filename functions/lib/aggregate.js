@@ -99,14 +99,10 @@ function findAnyImageFromHtml(html, baseHost) {
 }
 
 /* ---------- мапа «PN детали → PN картинки» (точечно) ---------- */
-/* У этих трёх карточек фото хранится под другим PN на CDN. */
 const SEARS_IMG_PN_REDIRECT = {
-  // Kenmore Elite Microwave Thermal Cut-off
-  '5304509475': '5304464094',
-  // Crosley Microwave Door Interlock Switch Lever
-  '5304509458': '5304464097',
-  // Kenmore Elite Microwave Door Interlock Switch
-  '5304509459': '5304464098'
+  '5304509475': '5304464094', // Kenmore Elite Microwave Thermal Cut-off
+  '5304509458': '5304464097', // Crosley Microwave Door Interlock Switch Lever
+  '5304509459': '5304464098'  // Kenmore Elite Microwave Door Interlock Switch
 };
 /* ---------------------------------------------------------------- */
 
@@ -114,13 +110,12 @@ const SEARS_IMG_PN_REDIRECT = {
 function extractPrevNumbersFromSears(html, currentPN) {
   const $ = cheerio.load(html);
 
-  // найти элемент с текстом "Previous part numbers" (независимо от тега/классов)
+  // найти элемент с текстом "Previous part numbers"
   let $hdr = $('*:contains("Previous part numbers")').filter((_, el) =>
     $(el).text().trim().toLowerCase() === 'previous part numbers'
   ).first();
   if (!$hdr.length) return [];
 
-  // собрать текст из ближайших контейнеров после заголовка
   const containers = [
     $hdr.next(),
     $hdr.parent(),
@@ -132,7 +127,6 @@ function extractPrevNumbersFromSears(html, currentPN) {
     const t = $c.text().trim();
     if (t && /part\s*#\s*\d{7,}/i.test(t)) { textBlock = t; break; }
   }
-  // fallback: окно по «сырому» HTML за заголовком
   if (!textBlock) {
     const raw = String(html);
     const i = raw.toLowerCase().indexOf('previous part numbers');
@@ -148,6 +142,22 @@ function extractPrevNumbersFromSears(html, currentPN) {
     if (pn && pn !== currentPN) set.add(pn);
   }
   return Array.from(set);
+}
+
+/* ---------- Sears: извлечь заголовок модели («Model # ...») ---------- */
+function extractSearsModelTitle(html) {
+  const $ = cheerio.load(html);
+  // Ищем любой элемент, где встречается «Model #»
+  const cand = $('h1, h2, div, span, p')
+    .filter((_, el) => /Model\s*#\s*/i.test($(el).text()))
+    .first();
+
+  if (!cand.length) return '';
+
+  let txt = cand.text().replace(/\s+Official\s+/i, ' ').trim();
+  // Нормализуем множественные пробелы
+  txt = txt.replace(/\s{2,}/g, ' ').trim();
+  return txt;
 }
 
 /* ---------- main ---------- */
@@ -176,8 +186,6 @@ export async function aggregate(q) {
           part_number: x.part_number || '',
           availability: x.availability || '',
           oem_flag: x.oem_flag || false,
-
-          // 👇 добавили готовую подпись для фронта
           part_label: x.part_number ? `Part #${x.part_number}` : ''
         });
       }
@@ -198,7 +206,7 @@ export async function aggregate(q) {
 
   /* ---------- постобработка изображений ---------- */
 
-  // 1) Sears: если нет картинки ИЛИ она «словесная» — строим по PN (с редиректом)
+  // 1) Sears: если нет картинки ИЛИ «словесная» — строим по PN (с редиректом)
   const BAD_SEARS_IMG = /PD_0022_628_(KENMORE|CROSLEY|MICROWAVE|WHITE-WESTINGHOUSE|LATCH)\b/i;
   for (const it of clean) {
     if (it.supplier !== 'SearsPartsDirect') continue;
@@ -212,19 +220,23 @@ export async function aggregate(q) {
     }
   }
 
-  // 2) Догруз с PDP для Sears и RepairClinic (если пусто или «наша по PN»)
+  // 2) Догруз с PDP для Sears и RepairClinic
   const toFetchPDP = [];
   for (const it of clean) {
     if (!it.url) continue;
     const isSears = it.supplier === 'SearsPartsDirect';
     const isRC    = it.supplier === 'RepairClinic';
-    if (isSears && (!it.image || BUILT_SEARS_PN_IMG.test(String(it.image)))) {
+
+    // Было: идём только если нет картинки / картинка «наша».
+    // Стало: для Sears также идём, если нет числового PN (модельные страницы).
+    const hasNumericPN = /\d{7,}/.test(String(it.part_number || ''));
+    if (isSears && ( !it.image || BUILT_SEARS_PN_IMG.test(String(it.image)) || !hasNumericPN )) {
       toFetchPDP.push(it);
     }
     if (isRC && !it.image) {
       toFetchPDP.push(it);
     }
-    if (toFetchPDP.length >= 30) break; // лимит на PDP-запросы — как в рабочем варианте
+    if (toFetchPDP.length >= 30) break; // лимит, как у тебя
   }
 
   await Promise.allSettled(
@@ -246,18 +258,21 @@ export async function aggregate(q) {
           it.image = img;
         }
 
-        // === Previous part numbers: забираем только из их блока на PDP Sears ===
+        // Sears: Previous part numbers
         if (it.supplier === 'SearsPartsDirect') {
           const currentPN = (String(it.part_number || '').match(/\d{7,}/) || [])[0] || '';
           const prev = extractPrevNumbersFromSears(html, currentPN);
           if (prev.length) {
-            // можно сохранить как отдельное поле, если нужно на фронте
             it.previous_part_numbers = prev;
-
-            // *опционально* допишем к имени короткую подпись (не мешает разметке)
             if (!/previous part numbers/i.test(it.name || '')) {
               it.name = `${it.name} — Previous part numbers: ${prev.map(p => `#${p}`).join(', ')}`;
             }
+          }
+
+          // Sears: если это страница модели — подменим имя на «Model # ...»
+          const modelTitle = extractSearsModelTitle(html);
+          if (modelTitle) {
+            it.name = modelTitle;
           }
         }
       } catch {
@@ -266,10 +281,10 @@ export async function aggregate(q) {
     })
   );
 
-  // 2c) Sears: если картинка "построенная из PN" и на CDN её нет — переключаемся на _Illustration
+  // 2c) Sears: если картинка «по PN» и её нет на CDN — используем _Illustration
   async function checkSearsAndMaybeIllustration(it) {
     const rawPN = (String(it.part_number || '').match(/\d{7,}/) || [])[0] || '';
-    const pn = SEARS_IMG_PN_REDIRECT[rawPN] || rawPN;   // учитываем редиректы PN картинок
+    const pn = SEARS_IMG_PN_REDIRECT[rawPN] || rawPN;
     if (!pn) return;
     if (!BUILT_SEARS_PN_IMG.test(String(it.image || ''))) return;
     try {
@@ -293,12 +308,12 @@ export async function aggregate(q) {
     await Promise.allSettled(candidates.map(checkSearsAndMaybeIllustration));
   }
 
-  // 3) Проксируем Sears/RC картинки через /api/img
+  // 3) Проксируем изображения
   for (const it of clean) {
     if (it.image) it.image = proxyImage(it.image);
   }
 
-  // 4) Подстраховка: если в name ещё нет "Part #", аккуратно допишем его
+  // 4) Дописываем "Part #..." только если PN числовой
   for (const it of clean) {
     const pnDigits = (String(it.part_number || '').match(/\d{7,}/) || [])[0] || '';
     if (pnDigits && !/Part\s*#\d{7,}/i.test(it.name || '')) {
