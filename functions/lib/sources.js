@@ -388,24 +388,28 @@ export const sources = [
     });
 
     // 2) Если это НЕ страница поиска, а прямо страница детали
-    if (!out.length) {
-      const title = t(
-        $('h1.page-title span, h1.page-title, h1').first().text()
-      );
+if (!out.length) {
+  const title = t(
+    $('h1.page-title span, h1.page-title, h1').first().text()
+  );
 
-      // пробуем вытащить ссылку/каноникал
-      const canon =
-        $('link[rel="canonical"]').attr('href') ||
-        $('meta[property="og:url"]').attr('content') ||
-        '';
+  const canon =
+    $('link[rel="canonical"]').attr('href') ||
+    $('meta[property="og:url"]').attr('content') ||
+    '';
 
-      const link = absUrl(canon || `${BASE_RP}`, BASE_RP);
+  const link = absUrl(canon || `${BASE_RP}`, BASE_RP);
 
-      let imgRaw =
-        $('img.product-image-photo').attr('src') ||
-        $('meta[property="og:image"]').attr('content') ||
-        '';
-      const image = absUrl(imgRaw, BASE_RP);
+  // Пытаемся вытащить картинку из всех типичных мест
+  let imgRaw =
+    $('meta[property="og:image"]').attr('content') ||
+    $('.product.media img').first().attr('src') ||
+    $('.product.media img').first().attr('data-src') ||
+    $('img.product-image-photo').first().attr('src') ||
+    $('img').first().attr('src') ||
+    '';
+
+  const image = absUrl(imgRaw, BASE_RP);
 
       const priceText = t(
         $('.price').first().text()
