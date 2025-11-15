@@ -322,89 +322,136 @@ export const sources = [
   },
 
   /* --- ReliableParts --- */
-  {
-    name: 'ReliableParts',
-    searchUrl: (q)=> `${BASE_RP}/catalogsearch/result/?q=${encodeURIComponent(q)}`,
-    parser: async (html, q)=>{
-      const $ = cheerio.load(html);
-      const out = [];
+{
+  name: 'ReliableParts',
+  searchUrl: (q)=> `${BASE_RP}/catalogsearch/result/?q=${encodeURIComponent(q)}`,
+  parser: async (html, q)=>{
+    const $ = cheerio.load(html);
+    let out = [];
 
-      $('.product-item').each((_, el) => {
-        const el$ = $(el);
+    // 1) Попытка: стандартная страница поиска (Magento, .product-item)
+    $('.product-item').each((_, el) => {
+      const el$ = $(el);
 
-        const a$ =
-          el$.find('.product-item-link').first().length
-            ? el$.find('.product-item-link').first()
-            : el$.find('a[href]').first();
+      const a$ =
+        el$.find('.product-item-link').first().length
+          ? el$.find('.product-item-link').first()
+          : el$.find('a[href]').first();
 
-        const href = a$.attr('href') || '';
-        if (!href) return;
+      const href = a$.attr('href') || '';
+      if (!href) return;
 
-        const link = absUrl(href, BASE_RP);
+      const link = absUrl(href, BASE_RP);
 
-        const title = first(
-          a$.text(),
-          el$.find('.product-item-name').text(),
-          el$.find('h2, h3').first().text(),
-          el$.text()
-        );
+      const title = first(
+        a$.text(),
+        el$.find('.product-item-name').text(),
+        el$.find('h2, h3').first().text(),
+        el$.text()
+      );
 
-        let imgRaw =
-          el$.find('img.product-image-photo').attr('src') ||
-          el$.find('img').attr('data-src') ||
-          el$.find('img').attr('srcset') ||
-          el$.find('img').attr('src') ||
-          '';
+      let imgRaw =
+        el$.find('img.product-image-photo').attr('src') ||
+        el$.find('img').attr('data-src') ||
+        el$.find('img').attr('srcset') ||
+        el$.find('img').attr('src') ||
+        '';
 
-        const image = absUrl(imgRaw, BASE_RP);
+      const image = absUrl(imgRaw, BASE_RP);
 
-        const blockText = t(el$.text());
-        const pn =
-          pnText(blockText) ||
-          pnText(title)      ||
-          pnText(link);
+      const blockText = t(el$.text());
+      const pn =
+        pnText(blockText) ||
+        pnText(title)      ||
+        pnText(link);
 
-        const priceText = t(
-          el$.find('.price').first().text() ||
-          el$.find('[data-price-type="finalPrice"]').first().text()
-        );
-        const priceNum = priceText
-          .replace(/[^0-9.,]/g, '')
-          .replace(',', '.');
+      const priceText = t(
+        el$.find('.price').first().text() ||
+        el$.find('[data-price-type="finalPrice"]').first().text()
+      );
+      const priceNum = priceText
+        .replace(/[^0-9.,]/g, '')
+        .replace(',', '.');
 
-        const availability = /in stock/i.test(blockText) ? 'In stock' : '';
+      const availability = /in stock/i.test(blockText) ? 'In stock' : '';
 
+      out.push({
+        title: t(title),
+        link,
+        image,
+        source: 'ReliableParts',
+        part_number: pn,
+        price: priceNum || '',
+        currency: priceText.includes('$') ? 'USD' : '',
+        availability
+      });
+    });
+
+    // 2) Если это НЕ страница поиска, а прямо страница детали
+    if (!out.length) {
+      const title = t(
+        $('h1.page-title span, h1.page-title, h1').first().text()
+      );
+
+      // пробуем вытащить ссылку/каноникал
+      const canon =
+        $('link[rel="canonical"]').attr('href') ||
+        $('meta[property="og:url"]').attr('content') ||
+        '';
+
+      const link = absUrl(canon || `${BASE_RP}`, BASE_RP);
+
+      let imgRaw =
+        $('img.product-image-photo').attr('src') ||
+        $('meta[property="og:image"]').attr('content') ||
+        '';
+      const image = absUrl(imgRaw, BASE_RP);
+
+      const priceText = t(
+        $('.price').first().text()
+      );
+
+      const fullText = t($.text());
+      const pn =
+        pnText(fullText) ||  // Part # / SMG / DG94...
+        pnText(title)    ||
+        pnText(link)     ||
+        pnText(q);
+
+      if (title && (image || priceText || pn)) {
         out.push({
-          title: t(title),
+          title,
           link,
           image,
           source: 'ReliableParts',
           part_number: pn,
-          price: priceNum || '',
+          price: priceText,
           currency: priceText.includes('$') ? 'USD' : '',
-          availability
-        });
-      });
-
-      if (!out.length && q) {
-        out.push({
-          title: `Открыть поиск ReliableParts: ${q}`,
-          link: `${BASE_RP}/catalogsearch/result/?q=${encodeURIComponent(q)}`,
-          image: '',
-          source: 'ReliableParts',
-          part_number: pnText(q)
+          availability: /in stock/i.test(fullText) ? 'In stock' : ''
         });
       }
+    }
 
-      const seen = new Set();
-      return out.filter(x => {
-        const k = x.link;
-        if (!k || seen.has(k)) return false;
-        seen.add(k);
-        return true;
+    // 3) Если всё равно ничего — даём фолбэк "Открыть поиск …"
+    if (!out.length && q) {
+      out.push({
+        title: `Открыть поиск ReliableParts: ${q}`,
+        link: `${BASE_RP}/catalogsearch/result/?q=${encodeURIComponent(q)}`,
+        image: '',
+        source: 'ReliableParts',
+        part_number: pnText(q)
       });
     }
-  },
+
+    const seen = new Set();
+    return out.filter(x => {
+      const k = x.link;
+      if (!k || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }
+}
 
   /* --- AppliancePartsPros --- */
   {
