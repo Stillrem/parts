@@ -1,17 +1,32 @@
 // functions/lib/sources.js
 import * as cheerio from 'cheerio';
 
-const BASE_SEARS = 'https://www.searspartsdirect.com';
-const BASE_RC    = 'https://www.repairclinic.com';
-const BASE_RP    = 'https://www.reliableparts.com'; // 👈 переименовал на RP и ниже везде RP
+const BASE_SEARS  = 'https://www.searspartsdirect.com';
+const BASE_RC     = 'https://www.repairclinic.com';
+const BASE_RP     = 'https://www.reliableparts.com';
+const BASE_APP    = 'https://www.appliancepartspros.com';
+const BASE_PS     = 'https://www.partselect.com';
+const BASE_ENC    = 'https://www.encompass.com';
+const BASE_MAR    = 'https://www.marcone.com';
+const BASE_EBAY   = 'https://www.ebay.com';
+const BASE_AMZ    = 'https://www.amazon.com';
+const BASE_WMT    = 'https://www.walmart.com';
 
+// Утилиты
 const t = (s)=>String(s||'').replace(/\s+/g,' ').trim();
-const first = (...vals)=>{ for(const v of vals){ const x=t(v); if(x) return x; } return ''; };
+const first = (...vals)=>{ for (const v of vals){ const x=t(v); if (x) return x; } return ''; };
 
 // PN из текста (запасной вариант)
-const pnText = (s)=>{ const m=String(s).match(/[A-Z0-9\-]{5,}/i); return m?m[0].toUpperCase():''; };
-// PN из URL Sears: .../id-5304509451
-const pnFromLink = (url)=>{ const m=String(url||'').match(/(?:^|[^\d])(\d{7,})\b/); return m?m[1].toUpperCase():''; };
+const pnText = (s)=>{
+  const m = String(s).match(/[A-Z0-9\-]{5,}/i);
+  return m ? m[0].toUpperCase() : '';
+};
+
+// PN из URL Sears: .../id-5304509451 (7+ цифр)
+const pnFromLink = (url)=>{
+  const m = String(url||'').match(/(?:^|[^\d])(\d{7,})\b/);
+  return m ? m[1].toUpperCase() : '';
+};
 
 function unwrapNext(src){
   if(!src) return '';
@@ -23,6 +38,7 @@ function unwrapNext(src){
   }catch{}
   return src;
 }
+
 function absUrl(src, base){
   if(!src) return '';
   src = unwrapNext(String(src).trim());
@@ -30,9 +46,15 @@ function absUrl(src, base){
   if (src.startsWith('//')) return 'https:'+src;
   if (/^https?:\/\//i.test(src)) return src;
   if (src.startsWith('/')) return base.replace(/\/$/,'') + src;
-  if (/\s+\d+x(?:,|$)/.test(src)) { const u0 = src.split(',')[0].trim().split(' ')[0].trim(); return absUrl(u0, base); }
+  // случай с srcset: "https://... 1x, https://... 2x"
+  if (/\s+\d+x(?:,|$)/.test(src)) {
+    const u0 = src.split(',')[0].trim().split(' ')[0].trim();
+    return absUrl(u0, base);
+  }
   return src;
 }
+
+/* === Sears CDN helper === */
 const isSearsCDN = (u)=>/^https?:\/\/s\.sears\.com\/is\/image\/Sears\//i.test(String(u||''));
 
 function pickSearsThumb($ctx){
@@ -99,6 +121,7 @@ function rcFromJsonLD($){
   const seen=new Set();
   return out.filter(x=>{ if(!x.link||seen.has(x.link)) return false; seen.add(x.link); return true; });
 }
+
 function rcFromNextData($){
   const out=[]; const el=$('#__NEXT_DATA__').first(); if(!el.length) return out;
   const txt=el.contents().text(); if(!txt) return out;
@@ -120,6 +143,7 @@ function rcFromNextData($){
 
 /* ===== SOURCES ===== */
 export const sources = [
+  /* --- SearsPartsDirect --- */
   {
     name: 'SearsPartsDirect',
     searchUrl: (q)=> `${BASE_SEARS}/search?q=${encodeURIComponent(q)}`,
@@ -134,14 +158,23 @@ export const sources = [
         const href=a$.attr('href')||'';
         if(!/\/part\/|\/product\//i.test(href||'')) return;
 
-        const title=first(el$.find('.card-title').text(), el$.find('.product-title').text(), el$.text());
+        const title=first(
+          el$.find('.card-title').text(),
+          el$.find('.product-title').text(),
+          el$.text()
+        );
         const link=absUrl(href, BASE_SEARS);
         const image=pickSearsThumb(el$);
 
-        // ВАЖНО: PN СНАЧАЛА из ссылки, потом из текста
         const part_number = pnFromLink(link) || pnText(title);
 
-        out.push({ title:t(title), link, image, source:'SearsPartsDirect', part_number });
+        out.push({
+          title: t(title),
+          link,
+          image,
+          source:'SearsPartsDirect',
+          part_number
+        });
       });
 
       // модели
@@ -150,36 +183,61 @@ export const sources = [
           const el$=$(el);
           let modelHref='';
           el$.find('a[href]').each((_,a)=>{
-            const h=$(a).attr('href')||''; const txt=t($(a).text()).toLowerCase();
+            const h=$(a).attr('href')||'';
+            const txt=t($(a).text()).toLowerCase();
             if(/\/model\//i.test(h)) modelHref=modelHref||h;
             if(/shop\s*parts/i.test(txt) && h) modelHref=h;
           });
           if(!modelHref) return;
           const link=absUrl(modelHref, BASE_SEARS);
-          const title=first(el$.find('.card-title, .product-title, .model-title').text(), el$.attr('aria-label'), el$.text());
+          const title=first(
+            el$.find('.card-title, .product-title, .model-title').text(),
+            el$.attr('aria-label'),
+            el$.text()
+          );
           const image=pickSearsThumb(el$);
           const part_number = pnFromLink(link) || pnText(title);
-          out.push({ title:t(title), link, image, source:'SearsPartsDirect', part_number });
+          out.push({
+            title: t(title),
+            link,
+            image,
+            source:'SearsPartsDirect',
+            part_number
+          });
         });
 
         // любые ссылки /model/
         if(!out.length){
           const seen=new Set();
           $('a[href*="/model/"]').each((_,a)=>{
-            const h=$(a).attr('href')||''; if(!h || seen.has(h)) return; seen.add(h);
+            const h=$(a).attr('href')||'';
+            if(!h || seen.has(h)) return;
+            seen.add(h);
             const link=absUrl(h, BASE_SEARS);
             const title=t($(a).text())||link;
             const part_number = pnFromLink(link) || pnText(title);
-            out.push({ title, link, image:'', source:'SearsPartsDirect', part_number });
+            out.push({
+              title,
+              link,
+              image:'',
+              source:'SearsPartsDirect',
+              part_number
+            });
           });
         }
       }
 
       const seen=new Set();
-      return out.filter(x=>{ const k=x.link; if(!k||seen.has(k)) return false; seen.add(k); return true; });
+      return out.filter(x=>{
+        const k=x.link;
+        if(!k||seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
     }
   },
 
+  /* --- RepairClinic --- */
   {
     name: 'RepairClinic',
     searchUrl: (q)=> `${BASE_RC}/Shop-For-Parts?query=${encodeURIComponent(q)}`,
@@ -187,11 +245,15 @@ export const sources = [
       const $=cheerio.load(html);
       let out=[];
 
-      const tiles = $("[data-qa='product-tile'], [data-automation-id='product-tile'], .product-card, .product-tile, .search-results__grid-item, .product-grid__item");
+      const tiles = $(
+        "[data-qa='product-tile'], [data-automation-id='product-tile'], .product-card, .product-tile, .search-results__grid-item, .product-grid__item"
+      );
+
       tiles.each((_,el)=>{
         const el$=$(el);
         const a$=el$.find('a[href]').first();
-        const href=a$.attr('href')||''; if(!href) return;
+        const href=a$.attr('href')||'';
+        if(!href) return;
 
         const title=first(
           el$.find("[data-qa='product-title']").text(),
@@ -200,12 +262,13 @@ export const sources = [
           el$.text()
         );
 
-        let imgRaw = el$.find('img').attr('data-src')
-                 || el$.find('img').attr('data-original')
-                 || el$.find('img').attr('data-srcset')
-                 || el$.find('img').attr('srcset')
-                 || el$.find('img').attr('src')
-                 || '';
+        let imgRaw =
+          el$.find('img').attr('data-src')      ||
+          el$.find('img').attr('data-original') ||
+          el$.find('img').attr('data-srcset')   ||
+          el$.find('img').attr('srcset')        ||
+          el$.find('img').attr('src')           ||
+          '';
 
         out.push({
           title: t(title),
@@ -218,22 +281,47 @@ export const sources = [
 
       if(!out.length){
         const ld=rcFromJsonLD($);
-        if(ld.length) out = ld.map(x=>({ ...x, source:'RepairClinic', part_number: pnText(x.title) }));
+        if(ld.length) {
+          out = ld.map(x=>({
+            ...x,
+            source:'RepairClinic',
+            part_number: pnText(x.title)
+          }));
+        }
       }
+
       if(!out.length){
         const nx=rcFromNextData($);
-        if(nx.length) out = nx.map(x=>({ ...x, source:'RepairClinic', part_number: pnText(x.title) }));
+        if(nx.length) {
+          out = nx.map(x=>({
+            ...x,
+            source:'RepairClinic',
+            part_number: pnText(x.title)
+          }));
+        }
       }
 
       if(!out.length && q){
-        out.push({ title:`Открыть поиск RepairClinic: ${q}`, link:`${BASE_RC}/Shop-For-Parts?query=${encodeURIComponent(q)}`, image:'', source:'RepairClinic', part_number: pnText(q) });
+        out.push({
+          title:`Открыть поиск RepairClinic: ${q}`,
+          link:`${BASE_RC}/Shop-For-Parts?query=${encodeURIComponent(q)}`,
+          image:'',
+          source:'RepairClinic',
+          part_number: pnText(q)
+        });
       }
 
       const seen=new Set();
-      return out.filter(x=>{ const k=x.link; if(!k||seen.has(k)) return false; seen.add(k); return true; });
+      return out.filter(x=>{
+        const k=x.link;
+        if(!k||seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
     }
   },
 
+  /* --- ReliableParts --- */
   {
     name: 'ReliableParts',
     searchUrl: (q)=> `${BASE_RP}/catalogsearch/result/?q=${encodeURIComponent(q)}`,
@@ -241,11 +329,9 @@ export const sources = [
       const $ = cheerio.load(html);
       const out = [];
 
-      // Типичный Magento / ReliableParts: .product-item
       $('.product-item').each((_, el) => {
         const el$ = $(el);
 
-        // ссылка на товар
         const a$ =
           el$.find('.product-item-link').first().length
             ? el$.find('.product-item-link').first()
@@ -256,7 +342,6 @@ export const sources = [
 
         const link = absUrl(href, BASE_RP);
 
-        // заголовок
         const title = first(
           a$.text(),
           el$.find('.product-item-name').text(),
@@ -264,7 +349,6 @@ export const sources = [
           el$.text()
         );
 
-        // картинка
         let imgRaw =
           el$.find('img.product-image-photo').attr('src') ||
           el$.find('img').attr('data-src') ||
@@ -274,14 +358,12 @@ export const sources = [
 
         const image = absUrl(imgRaw, BASE_RP);
 
-        // Part # / SKU: берём из текста блока
         const blockText = t(el$.text());
         const pn =
-          pnText(blockText) ||            // из всего текста карточки
-          pnText(title)      ||           // из заголовка
-          pnText(link);                   // из ссылки (на всякий случай)
+          pnText(blockText) ||
+          pnText(title)      ||
+          pnText(link);
 
-        // Цена
         const priceText = t(
           el$.find('.price').first().text() ||
           el$.find('[data-price-type="finalPrice"]').first().text()
@@ -290,7 +372,6 @@ export const sources = [
           .replace(/[^0-9.,]/g, '')
           .replace(',', '.');
 
-        // Наличие
         const availability = /in stock/i.test(blockText) ? 'In stock' : '';
 
         out.push({
@@ -302,11 +383,9 @@ export const sources = [
           price: priceNum || '',
           currency: priceText.includes('$') ? 'USD' : '',
           availability
-          // oem_flag можно потом уточнить
         });
       });
 
-      // Фоллбек: если ничего не распарсили — хотя бы ссылка на поиск
       if (!out.length && q) {
         out.push({
           title: `Открыть поиск ReliableParts: ${q}`,
@@ -317,10 +396,452 @@ export const sources = [
         });
       }
 
-      // де-дуп по ссылке
       const seen = new Set();
       return out.filter(x => {
         const k = x.link;
+        if (!k || seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+    }
+  },
+
+  /* --- AppliancePartsPros --- */
+  {
+    name: 'AppliancePartsPros',
+    searchUrl: (q)=> `${BASE_APP}/search.aspx?searchtext=${encodeURIComponent(q)}`,
+    parser: async (html, q)=>{
+      const $ = cheerio.load(html);
+      const out = [];
+
+      // разные возможные контейнеры результатов
+      $('.searchProduct, .list-item, .product-list-item, .product').each((_, el)=>{
+        const el$ = $(el);
+        const a$  = el$.find('a[href]').first();
+        const href = a$.attr('href') || '';
+        if (!href) return;
+
+        const link = absUrl(href, BASE_APP);
+
+        const title = first(
+          el$.find('.productname, .searchProductTitle').text(),
+          el$.find('h2, h3').first().text(),
+          a$.attr('title'),
+          a$.text()
+        );
+
+        let imgRaw =
+          el$.find('img').attr('data-src') ||
+          el$.find('img').attr('src') ||
+          '';
+        const image = absUrl(imgRaw, BASE_APP);
+
+        const blockText = t(el$.text());
+        const pn = pnText(blockText) || pnText(title) || pnText(link);
+
+        out.push({
+          title: t(title),
+          link,
+          image,
+          source: 'AppliancePartsPros',
+          part_number: pn
+        });
+      });
+
+      if (!out.length && q){
+        out.push({
+          title: `Открыть поиск AppliancePartsPros: ${q}`,
+          link: `${BASE_APP}/search.aspx?searchtext=${encodeURIComponent(q)}`,
+          image: '',
+          source: 'AppliancePartsPros',
+          part_number: pnText(q)
+        });
+      }
+
+      const seen = new Set();
+      return out.filter(x=>{
+        const k=x.link;
+        if (!k || seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+    }
+  },
+
+  /* --- PartSelect --- */
+  {
+    name: 'PartSelect',
+    searchUrl: (q)=> `${BASE_PS}/Search.aspx?SearchText=${encodeURIComponent(q)}`,
+    parser: async (html, q)=>{
+      const $ = cheerio.load(html);
+      const out = [];
+
+      $('.search-result, .ps-product-list__item, .product-list-item').each((_, el)=>{
+        const el$ = $(el);
+        const a$  = el$.find('a[href]').first();
+        const href = a$.attr('href') || '';
+        if (!href) return;
+
+        const link = absUrl(href, BASE_PS);
+
+        const title = first(
+          el$.find('.product-title, .ps-product-list__title').text(),
+          el$.find('h2, h3').first().text(),
+          a$.attr('title'),
+          a$.text()
+        );
+
+        let imgRaw =
+          el$.find('img').attr('data-src') ||
+          el$.find('img').attr('src') ||
+          '';
+        const image = absUrl(imgRaw, BASE_PS);
+
+        const blockText = t(el$.text());
+        const pn = pnText(blockText) || pnText(title) || pnText(link);
+
+        out.push({
+          title: t(title),
+          link,
+          image,
+          source: 'PartSelect',
+          part_number: pn
+        });
+      });
+
+      if (!out.length && q){
+        out.push({
+          title: `Открыть поиск PartSelect: ${q}`,
+          link: `${BASE_PS}/Search.aspx?SearchText=${encodeURIComponent(q)}`,
+          image: '',
+          source: 'PartSelect',
+          part_number: pnText(q)
+        });
+      }
+
+      const seen = new Set();
+      return out.filter(x=>{
+        const k=x.link;
+        if (!k || seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+    }
+  },
+
+  /* --- Encompass --- */
+  {
+    name: 'Encompass',
+    // можно использовать общий поиск по PN
+    searchUrl: (q)=> `${BASE_ENC}/search?q=${encodeURIComponent(q)}`,
+    parser: async (html, q)=>{
+      const $ = cheerio.load(html);
+      const out = [];
+
+      $('.product-item, .search-result-item, .result-item').each((_, el)=>{
+        const el$ = $(el);
+        const a$  = el$.find('a[href]').first();
+        const href = a$.attr('href') || '';
+        if (!href) return;
+
+        const link = absUrl(href, BASE_ENC);
+
+        const title = first(
+          el$.find('.product-title, .item-title').text(),
+          el$.find('h2, h3').first().text(),
+          a$.attr('title'),
+          a$.text()
+        );
+
+        let imgRaw =
+          el$.find('img').attr('data-src') ||
+          el$.find('img').attr('src') ||
+          '';
+        const image = absUrl(imgRaw, BASE_ENC);
+
+        const blockText = t(el$.text());
+        const pn = pnText(blockText) || pnText(title) || pnText(link);
+
+        out.push({
+          title: t(title),
+          link,
+          image,
+          source: 'Encompass',
+          part_number: pn
+        });
+      });
+
+      if (!out.length && q){
+        out.push({
+          title: `Открыть поиск Encompass: ${q}`,
+          link: `${BASE_ENC}/search?q=${encodeURIComponent(q)}`,
+          image: '',
+          source: 'Encompass',
+          part_number: pnText(q)
+        });
+      }
+
+      const seen = new Set();
+      return out.filter(x=>{
+        const k=x.link;
+        if (!k || seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+    }
+  },
+
+  /* --- Marcone --- */
+  {
+    name: 'Marcone',
+    searchUrl: (q)=> `${BASE_MAR}/Search?query=${encodeURIComponent(q)}`,
+    parser: async (html, q)=>{
+      const $ = cheerio.load(html);
+      const out = [];
+
+      $('.product, .product-item, .search-result-item').each((_, el)=>{
+        const el$ = $(el);
+        const a$  = el$.find('a[href]').first();
+        const href = a$.attr('href') || '';
+        if (!href) return;
+
+        const link = absUrl(href, BASE_MAR);
+
+        const title = first(
+          el$.find('.product-title, .item-title').text(),
+          el$.find('h2, h3').first().text(),
+          a$.attr('title'),
+          a$.text()
+        );
+
+        let imgRaw =
+          el$.find('img').attr('data-src') ||
+          el$.find('img').attr('src') ||
+          '';
+        const image = absUrl(imgRaw, BASE_MAR);
+
+        const blockText = t(el$.text());
+        const pn = pnText(blockText) || pnText(title) || pnText(link);
+
+        out.push({
+          title: t(title),
+          link,
+          image,
+          source: 'Marcone',
+          part_number: pn
+        });
+      });
+
+      if (!out.length && q){
+        out.push({
+          title: `Открыть поиск Marcone: ${q}`,
+          link: `${BASE_MAR}/Search?query=${encodeURIComponent(q)}`,
+          image: '',
+          source: 'Marcone',
+          part_number: pnText(q)
+        });
+      }
+
+      const seen = new Set();
+      return out.filter(x=>{
+        const k=x.link;
+        if (!k || seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+    }
+  },
+
+  /* --- eBay --- */
+  {
+    name: 'eBay',
+    searchUrl: (q)=> `${BASE_EBAY}/sch/i.html?_nkw=${encodeURIComponent(q)}`,
+    parser: async (html, q)=>{
+      const $ = cheerio.load(html);
+      const out = [];
+
+      $('li.s-item').each((_, el)=>{
+        const el$ = $(el);
+        const a$  = el$.find('a.s-item__link, a[href]').first();
+        const href = a$.attr('href') || '';
+        if (!href) return;
+
+        const link = absUrl(href, BASE_EBAY);
+
+        const title = first(
+          el$.find('.s-item__title').text(),
+          a$.attr('aria-label'),
+          a$.text()
+        );
+
+        let imgRaw =
+          el$.find('img.s-item__image-img').attr('src') ||
+          el$.find('img').attr('src') ||
+          '';
+        const image = absUrl(imgRaw, BASE_EBAY);
+
+        const priceText = t(
+          el$.find('.s-item__price').text()
+        );
+
+        const pn = pnText(title) || pnText(link);
+
+        out.push({
+          title: t(title),
+          link,
+          image,
+          source: 'eBay',
+          part_number: pn,
+          price: priceText,
+          currency: priceText.includes('$') ? 'USD' : ''
+        });
+      });
+
+      if (!out.length && q){
+        out.push({
+          title: `Открыть поиск eBay: ${q}`,
+          link: `${BASE_EBAY}/sch/i.html?_nkw=${encodeURIComponent(q)}`,
+          image: '',
+          source: 'eBay',
+          part_number: pnText(q)
+        });
+      }
+
+      const seen = new Set();
+      return out.filter(x=>{
+        const k=x.link;
+        if (!k || seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+    }
+  },
+
+  /* --- Amazon --- */
+  {
+    name: 'Amazon',
+    searchUrl: (q)=> `${BASE_AMZ}/s?k=${encodeURIComponent(q)}`,
+    parser: async (html, q)=>{
+      const $ = cheerio.load(html);
+      const out = [];
+
+      $('div[data-component-type="s-search-result"]').each((_, el)=>{
+        const el$ = $(el);
+        const a$  = el$.find('a.a-link-normal.a-text-normal, a.a-link-normal.s-no-outline, a[href]').first();
+        const href = a$.attr('href') || '';
+        if (!href) return;
+
+        const link = absUrl(href, BASE_AMZ);
+
+        const title = first(
+          el$.find('span.a-size-medium, span.a-size-base-plus').text(),
+          a$.attr('title'),
+          a$.text()
+        );
+
+        let imgRaw =
+          el$.find('img.s-image').attr('src') ||
+          el$.find('img').attr('src') ||
+          '';
+        const image = absUrl(imgRaw, BASE_AMZ);
+
+        const priceWhole = t(el$.find('span.a-price-whole').text());
+        const priceFrac  = t(el$.find('span.a-price-fraction').text());
+        const priceText  = (priceWhole || priceFrac) ? `$${priceWhole}${priceFrac}` : '';
+
+        const pn = pnText(title) || pnText(link);
+
+        out.push({
+          title: t(title),
+          link,
+          image,
+          source: 'Amazon',
+          part_number: pn,
+          price: priceText,
+          currency: priceText ? 'USD' : ''
+        });
+      });
+
+      if (!out.length && q){
+        out.push({
+          title: `Открыть поиск Amazon: ${q}`,
+          link: `${BASE_AMZ}/s?k=${encodeURIComponent(q)}`,
+          image: '',
+          source: 'Amazon',
+          part_number: pnText(q)
+        });
+      }
+
+      const seen = new Set();
+      return out.filter(x=>{
+        const k=x.link;
+        if (!k || seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+    }
+  },
+
+  /* --- Walmart --- */
+  {
+    name: 'Walmart',
+    searchUrl: (q)=> `${BASE_WMT}/search?q=${encodeURIComponent(q)}`,
+    parser: async (html, q)=>{
+      const $ = cheerio.load(html);
+      const out = [];
+
+      // Walmart часто меняет разметку, берём общие контейнеры
+      $('div.search-result-gridview-item, div[data-type="items"] div, div[data-automation-id="search-product"]').each((_, el)=>{
+        const el$ = $(el);
+        const a$  = el$.find('a[href]').first();
+        const href = a$.attr('href') || '';
+        if (!href) return;
+
+        const link = absUrl(href, BASE_WMT);
+
+        const title = first(
+          el$.find('a span, .product-title, .line-clamp-2').first().text(),
+          a$.attr('aria-label'),
+          a$.text()
+        );
+
+        let imgRaw =
+          el$.find('img').attr('data-image-src') ||
+          el$.find('img').attr('src') ||
+          '';
+        const image = absUrl(imgRaw, BASE_WMT);
+
+        const priceText = t(
+          el$.find('span[aria-hidden="true"]').first().text() ||
+          el$.find('.price-main').text()
+        );
+
+        const pn = pnText(title) || pnText(link);
+
+        out.push({
+          title: t(title),
+          link,
+          image,
+          source: 'Walmart',
+          part_number: pn,
+          price: priceText,
+          currency: priceText.includes('$') ? 'USD' : ''
+        });
+      });
+
+      if (!out.length && q){
+        out.push({
+          title: `Открыть поиск Walmart: ${q}`,
+          link: `${BASE_WMT}/search?q=${encodeURIComponent(q)}`,
+          image: '',
+          source: 'Walmart',
+          part_number: pnText(q)
+        });
+      }
+
+      const seen = new Set();
+      return out.filter(x=>{
+        const k=x.link;
         if (!k || seen.has(k)) return false;
         seen.add(k);
         return true;
