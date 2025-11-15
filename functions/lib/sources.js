@@ -3,7 +3,7 @@ import * as cheerio from 'cheerio';
 
 const BASE_SEARS = 'https://www.searspartsdirect.com';
 const BASE_RC    = 'https://www.repairclinic.com';
-const BASE_RP    = 'https://www.reliableparts.com';
+const BASE_RP    = 'https://www.reliableparts.com'; // 👈 переименовал на RP и ниже везде RP
 
 const t = (s)=>String(s||'').replace(/\s+/g,' ').trim();
 const first = (...vals)=>{ for(const v of vals){ const x=t(v); if(x) return x; } return ''; };
@@ -231,8 +231,10 @@ export const sources = [
 
       const seen=new Set();
       return out.filter(x=>{ const k=x.link; if(!k||seen.has(k)) return false; seen.add(k); return true; });
-    
-      {
+    }
+  },
+
+  {
     name: 'ReliableParts',
     searchUrl: (q)=> `${BASE_RP}/catalogsearch/result/?q=${encodeURIComponent(q)}`,
     parser: async (html, q)=>{
@@ -299,8 +301,8 @@ export const sources = [
           part_number: pn,
           price: priceNum || '',
           currency: priceText.includes('$') ? 'USD' : '',
-          availability,
-          // oem_flag можно потом уточнить, пока не ставим true/false жёстко
+          availability
+          // oem_flag можно потом уточнить
         });
       });
 
@@ -323,9 +325,6 @@ export const sources = [
         seen.add(k);
         return true;
       });
-    }
-  }
-];
     }
   }
 ];
