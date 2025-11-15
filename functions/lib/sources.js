@@ -231,6 +231,101 @@ export const sources = [
 
       const seen=new Set();
       return out.filter(x=>{ const k=x.link; if(!k||seen.has(k)) return false; seen.add(k); return true; });
+    
+      {
+    name: 'ReliableParts',
+    searchUrl: (q)=> `${BASE_RP}/catalogsearch/result/?q=${encodeURIComponent(q)}`,
+    parser: async (html, q)=>{
+      const $ = cheerio.load(html);
+      const out = [];
+
+      // Типичный Magento / ReliableParts: .product-item
+      $('.product-item').each((_, el) => {
+        const el$ = $(el);
+
+        // ссылка на товар
+        const a$ =
+          el$.find('.product-item-link').first().length
+            ? el$.find('.product-item-link').first()
+            : el$.find('a[href]').first();
+
+        const href = a$.attr('href') || '';
+        if (!href) return;
+
+        const link = absUrl(href, BASE_RP);
+
+        // заголовок
+        const title = first(
+          a$.text(),
+          el$.find('.product-item-name').text(),
+          el$.find('h2, h3').first().text(),
+          el$.text()
+        );
+
+        // картинка
+        let imgRaw =
+          el$.find('img.product-image-photo').attr('src') ||
+          el$.find('img').attr('data-src') ||
+          el$.find('img').attr('srcset') ||
+          el$.find('img').attr('src') ||
+          '';
+
+        const image = absUrl(imgRaw, BASE_RP);
+
+        // Part # / SKU: берём из текста блока
+        const blockText = t(el$.text());
+        const pn =
+          pnText(blockText) ||            // из всего текста карточки
+          pnText(title)      ||           // из заголовка
+          pnText(link);                   // из ссылки (на всякий случай)
+
+        // Цена
+        const priceText = t(
+          el$.find('.price').first().text() ||
+          el$.find('[data-price-type="finalPrice"]').first().text()
+        );
+        const priceNum = priceText
+          .replace(/[^0-9.,]/g, '')
+          .replace(',', '.');
+
+        // Наличие
+        const availability = /in stock/i.test(blockText) ? 'In stock' : '';
+
+        out.push({
+          title: t(title),
+          link,
+          image,
+          source: 'ReliableParts',
+          part_number: pn,
+          price: priceNum || '',
+          currency: priceText.includes('$') ? 'USD' : '',
+          availability,
+          // oem_flag можно потом уточнить, пока не ставим true/false жёстко
+        });
+      });
+
+      // Фоллбек: если ничего не распарсили — хотя бы ссылка на поиск
+      if (!out.length && q) {
+        out.push({
+          title: `Открыть поиск ReliableParts: ${q}`,
+          link: `${BASE_RP}/catalogsearch/result/?q=${encodeURIComponent(q)}`,
+          image: '',
+          source: 'ReliableParts',
+          part_number: pnText(q)
+        });
+      }
+
+      // де-дуп по ссылке
+      const seen = new Set();
+      return out.filter(x => {
+        const k = x.link;
+        if (!k || seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+    }
+  }
+];
     }
   }
 ];
