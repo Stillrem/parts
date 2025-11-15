@@ -3,7 +3,7 @@ import * as cheerio from 'cheerio';
 
 const BASE_SEARS = 'https://www.searspartsdirect.com';
 const BASE_RC    = 'https://www.repairclinic.com';
-const BASE_RL    = 'https://www.reliableparts.com';
+const BASE_RP    = 'https://www.reliableparts.com';
 
 const t = (s)=>String(s||'').replace(/\s+/g,' ').trim();
 const first = (...vals)=>{ for(const v of vals){ const x=t(v); if(x) return x; } return ''; };
