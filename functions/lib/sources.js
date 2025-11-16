@@ -715,6 +715,19 @@ export const sources = [
     const $ = cheerio.load(html);
     let out = [];
 
+    // аккуратный поиск PN, чтобы не ловить HTTPS/HTTP/WWW и т.п.
+    function safePnFrom(title, link) {
+      const upper = `${title || ''} ${link || ''}`.toUpperCase();
+      const matches = upper.match(/[A-Z0-9\-]{5,}/g) || [];
+
+      for (const m of matches) {
+        if (['HTTPS','HTTP','WWW','EBAY','COM','HTML'].includes(m)) continue;
+        return m;
+      }
+      return '';
+    }
+
+    // Вспомогательная функция: из одного блока вытащить карточку
     function pushFromBlock(el$) {
       const linkEl =
         el$.find('a.s-item__link[href]').first().length
@@ -745,8 +758,7 @@ export const sources = [
         el$.find('[data-testid="item-price"]').text()
       );
 
-      // ВАЖНО: PN только из title, без ссылки → HTTPS больше не поймаем
-      const pn = pnText(title);
+      const pn = safePnFrom(title, link);
 
       out.push({
         title: t(title || q),
@@ -759,14 +771,19 @@ export const sources = [
       });
     }
 
-    $('li.s-item').each((_, el) => pushFromBlock($(el)));
+    // 1) Классическая разметка
+    $('li.s-item').each((_, el) => {
+      pushFromBlock($(el));
+    });
 
+    // 2) Иногда товары лежат в других контейнерах
     if (!out.length) {
       $('div.s-item__wrapper, [data-testid="item"]').each((_, el) => {
         pushFromBlock($(el));
       });
     }
 
+    // 3) Жёсткий fallback: любые ссылки /itm/
     if (!out.length) {
       $('a[href*="/itm/"]').each((_, a) => {
         const el$ = $(a).closest('li, div').length ? $(a).closest('li, div') : $(a);
@@ -774,6 +791,7 @@ export const sources = [
       });
     }
 
+    // 4) Если совсем ничего или капча — один fallback-элемент
     const bodyText = $('body').text() || '';
     if (
       !out.length ||
