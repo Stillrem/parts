@@ -772,7 +772,7 @@ export const sources = [
     }
   },
 
-  /* --- Amazon --- */
+    /* --- Amazon --- */
   {
     name: 'Amazon',
     searchUrl: (q)=> `${BASE_AMZ}/s?k=${encodeURIComponent(q)}`,
@@ -780,19 +780,36 @@ export const sources = [
       const $ = cheerio.load(html);
       const out = [];
 
+      // аккуратно вытаскиваем заголовок товара
+      const extractAmazonTitle = (el$)=>{
+        const main = first(
+          el$.find('span.a-size-medium.a-color-base.a-text-normal').text(),
+          el$.find('span.a-size-base-plus.a-color-base.a-text-normal').text(),
+          el$.find('h2 a span').text(),
+          el$.find('h2 span').text()
+        );
+        if (main) return t(main);
+
+        const fallback = first(
+          el$.find('span.a-size-medium').text(),
+          el$.find('span.a-size-base-plus').text()
+        );
+        if (fallback) return t(fallback);
+
+        // если ничего не нашли, лучше понятный дефолт, чем пустая строка
+        return 'Amazon item';
+      };
+
       $('div[data-component-type="s-search-result"]').each((_, el)=>{
         const el$ = $(el);
-        const a$  = el$.find('a.a-link-normal.a-text-normal, a.a-link-normal.s-no-outline, a[href]').first();
+        const a$  = el$.find(
+          'a.a-link-normal.a-text-normal, a.a-link-normal.s-no-outline, a[href]'
+        ).first();
         const href = a$.attr('href') || '';
         if (!href) return;
 
-        const link = absUrl(href, BASE_AMZ);
-
-        const title = first(
-          el$.find('span.a-size-medium, span.a-size-base-plus').text(),
-          a$.attr('title'),
-          a$.text()
-        );
+        const link  = absUrl(href, BASE_AMZ);
+        const title = extractAmazonTitle(el$);
 
         let imgRaw =
           el$.find('img.s-image').attr('src') ||
@@ -802,12 +819,16 @@ export const sources = [
 
         const priceWhole = t(el$.find('span.a-price-whole').text());
         const priceFrac  = t(el$.find('span.a-price-fraction').text());
-        const priceText  = (priceWhole || priceFrac) ? `$${priceWhole}${priceFrac}` : '';
+        const priceText  = (priceWhole || priceFrac)
+          ? `$${priceWhole}${priceFrac}`
+          : '';
 
-        const pn = pnText(title) || pnText(link);
+        // PN берём только из заголовка, НЕ из URL, чтобы не ловить HTTPS
+        let pn = pnText(title);
+        if (pn === 'HTTPS') pn = '';   // страховка, на всякий случай
 
         out.push({
-          title: t(title),
+          title,
           link,
           image,
           source: 'Amazon',
