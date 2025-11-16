@@ -12,7 +12,7 @@
   --shadow: rgba(0, 0, 0, 0.55);
 
   /* поставь сюда свой лес, если нужен другой путь */
-  --bg-image: url('/forest-bg.jpg');
+  --bg-image: url('/IMG_0463.png');
 }
 
 *,
