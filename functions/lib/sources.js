@@ -744,20 +744,24 @@ export const sources = [
       // ---- ЦЕНА ----
       const priceRaw = t(
         el$.find('.s-item__price').first().text() ||
-        el$.find('[data-testid="item-price"]').first().text() ||
-        (el$.find('span[aria-label*="$"]').first().attr('aria-label') || '')
+        el$.find('[data-testid="item-price"]').first().text()
       );
 
-      // оставляем только числа, точку и запятую
+      // только цифры + точка/запятая
       let priceNum = priceRaw.replace(/[^0-9.,]/g, '');
-      // приводим запятую к точке
       priceNum = priceNum.replace(',', '.');
-
-      // если после чистки ничего не осталось — не ставим цену
       if (!priceNum) priceNum = '';
 
-      // ---- Part number ----
-      const pn = pnText(title || q);
+      // ---- Part number без HTTPS/HTTP/WWW ----
+      const pn = (() => {
+        const upper = `${title || ''} ${link || ''}`.toUpperCase();
+        const matches = upper.match(/[A-Z0-9\-]{5,}/g) || [];
+        for (const m of matches) {
+          if (m === 'HTTPS' || m === 'HTTP' || m === 'WWW') continue;
+          return m;
+        }
+        return '';
+      })();
 
       out.push({
         title: t(title || q),
@@ -765,8 +769,8 @@ export const sources = [
         image,
         source: 'eBay',
         part_number: pn,
-        price: priceNum,                // например "45.99"
-        currency: priceNum ? 'USD' : '' // чтобы фронт показал "$45.99 USD"
+        price: priceNum,               // например "45.99"
+        currency: priceNum ? 'USD' : ''// фронт сам добавит $/USD как у других
       });
     }
 
@@ -790,12 +794,8 @@ export const sources = [
       });
     }
 
-    // 4) Если совсем ничего или страница похожа на капчу — один fallback-элемент
-    const bodyText = $('body').text() || '';
-    if (
-      !out.length ||
-      /verify you are human|enable javascript to continue|captcha/i.test(bodyText)
-    ) {
+    // 4) Если совсем ничего не распарсили — один fallback-элемент "открыть поиск"
+    if (!out.length) {
       out = [{
         title: `Открыть поиск eBay: ${q}`,
         link: `${BASE_EBAY}/sch/i.html?_nkw=${encodeURIComponent(q)}`,
