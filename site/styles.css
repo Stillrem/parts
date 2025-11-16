@@ -11,7 +11,7 @@
   --shadow:    rgba(0, 0, 0, .52);
 
   /* поменяй путь, если фон в другом месте */
-  --bg-image: url("/img/bg-forest.jpg");
+  --bg-image: url("/IMG_0463.png");
 }
 
 * {
