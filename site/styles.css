@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hub Parts Search</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root {
+  --bg: #020509;
+  --fg: #f5f7fb;
+  --muted: #aab3bd;
+  --card: rgba(9, 16, 24, 0.78);
+  --chip: rgba(34, 48, 60, 0.85);
+  --accent: #4ee0c9;
+  --accent-soft: rgba(78, 224, 201, 0.28);
+}
+
+/* base */
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial,sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+/* фон с лесом + дымка */
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.3) 40%, rgba(0,0,0,0.9) 100%),
+    url("IMG_0463.png") center/cover no-repeat; /* <-- сюда поставь свой фон */
+  z-index: -2;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(120,255,214,0.18), transparent 55%),
+    radial-gradient(circle at 80% 100%, rgba(100,190,255,0.18), transparent 55%);
+  mix-blend-mode: screen;
+  opacity: 0.9;
+  z-index: -1;
+}
+
+/* контейнер страницы */
+
+main {
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 20px 14px 28px;
+}
+
+/* верхняя панель как в приложении */
+
+header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  margin: -20px -14px 18px;
+  padding: 16px 18px 14px;
+  backdrop-filter: blur(26px) saturate(180%);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  background:
+    linear-gradient(135deg, rgba(16,22,30,0.96), rgba(11,18,26,0.94));
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  box-shadow:
+    0 18px 45px rgba(0,0,0,0.75);
+}
+
+header h1 {
+  margin: 0 0 4px;
+  font-size: 20px;
+  letter-spacing: 0.03em;
+}
+
+header p {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* блок поиска – стекло */
+
+.search-shell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 22px;
+  background: radial-gradient(circle at 0 0, rgba(255,255,255,0.06), transparent 55%),
+              radial-gradient(circle at 100% 100%, rgba(0,0,0,0.35), transparent 55%),
+              var(--card);
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow:
+    0 18px 40px rgba(0,0,0,0.65),
+    0 0 0 1px rgba(255,255,255,0.02) inset;
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+}
+
+/* поле ввода и селекты */
+
+#q {
+  flex: 1 1 260px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: linear-gradient(145deg, rgba(10,14,18,0.88), rgba(20,26,32,0.88));
+  color: var(--fg);
+  font-size: 14px;
+  outline: none;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.02) inset,
+    0 10px 25px rgba(0,0,0,0.75);
+}
+
+#q::placeholder {
+  color: rgba(199,207,219,0.7);
+}
+
+button,
+select {
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: radial-gradient(circle at 0 0, rgba(255,255,255,0.08), transparent 55%),
+              rgba(15,23,34,0.96);
+  color: var(--fg);
+  cursor: pointer;
+  font-size: 13px;
+  min-width: 110px;
+  outline: none;
+  transition: transform .12s ease-out, box-shadow .12s ease-out, border-color .12s ease-out, background .12s ease-out;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.8);
+}
+
+button.primary {
+  background:
+    radial-gradient(circle at 0 0, rgba(255,255,255,0.12), transparent 60%),
+    linear-gradient(135deg, #4ee0c9, #4aa3ff);
+  border-color: rgba(159,255,235,0.7);
+  color: #04211f;
+  font-weight: 600;
+}
+
+button:hover,
+select:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 30px rgba(0,0,0,0.85);
+  border-color: rgba(255,255,255,0.14);
+}
+
+button:active,
+select:active {
+  transform: translateY(0);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.85);
+}
+
+/* чекбоксы / маленькие элементы */
+
+.inline {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* сетка результатов – стеклянные карточки */
+
+.equiv-title {
+  padding: 4px 4px 0 4px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: rgba(215,225,235,0.7);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill,minmax(280px,1fr));
+  gap: 14px;
+  padding: 8px 4px 16px;
+}
+
+/* карточка результата */
+
+.card {
+  display: flex;
+  gap: 10px;
+  border-radius: 22px;
+  overflow: hidden;
+  background:
+      radial-gradient(circle at 0 0, rgba(255,255,255,0.08), transparent 55%),
+      radial-gradient(circle at 100% 100%, rgba(0,0,0,0.55), transparent 55%),
+      rgba(8, 14, 22, 0.86);
+  border: 1px solid rgba(255,255,255,0.08);
+  backdrop-filter: blur(26px) saturate(180%);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  box-shadow:
+      0 24px 45px rgba(0,0,0,0.9),
+      0 0 0 1px rgba(255,255,255,0.03) inset;
+  transition: transform .14s ease-out, box-shadow .14s ease-out, border-color .14s ease-out;
+}
+
+.card:hover {
+  transform: translateY(-3px);
+  box-shadow:
+      0 26px 55px rgba(0,0,0,0.95),
+      0 0 0 1px rgba(149,255,230,0.22) inset;
+  border-color: rgba(149,255,230,0.55);
+}
+
+/* мини-превью детали */
+
+.thumb {
+  width: 110px;
+  min-height: 110px;
+  background:
+    radial-gradient(circle at 30% 0%, rgba(255,255,255,0.12), transparent 65%),
+    radial-gradient(circle at 80% 100%, rgba(78,224,201,0.3), transparent 65%),
+    #04070b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.thumb img {
+  width: 90%;
+  max-height: 90%;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 12px 18px rgba(0,0,0,0.8));
+}
+
+/* содержимое карточки */
+
+.body {
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.compat {
+  font-size: 11px;
+  color: rgba(212,222,232,0.9);
+}
+
+.price {
+  color: #8af7c5;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+/* ссылки на магазины */
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.links a {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(3, 29, 37, 0.85);
+  border: 1px solid rgba(92,245,214,0.35);
+  box-shadow: 0 8px 18px rgba(0,0,0,0.9);
+}
+
+.links a:hover {
+  background: rgba(78,224,201,0.16);
+}
+
+/* чипы */
+
+.chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.chip {
+  background: var(--chip);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 11px;
+  color: #e1f7ff;
+  border: 1px solid rgba(186,214,237,0.4);
+}
+
+/* скрытые элементы */
+
+.hidden { display: none; }
+
+/* адаптив */
+
+@media (max-width: 640px) {
+  header {
+    padding: 14px 14px 12px;
+  }
+  .search-shell {
+    border-radius: 20px;
+    padding: 10px 10px;
+  }
+  .card {
+    border-radius: 20px;
+  }
+}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Hub Parts Search</h1>
+    <p>Liquid glass поиск запчастей — только дизайн, вся логика остаётся как была.</p>
+
+    <form class="search-shell">
+      <input id="q" name="q" placeholder="Введите модель или part number…">
+      <select id="source">
+        <option value="">All sources</option>
+        <option value="sears">Sears PartsDirect</option>
+        <option value="rc">RepairClinic</option>
+        <option value="app">AppliancePartsPros</option>
+        <!-- твои варианты -->
+      </select>
+      <button type="submit" class="primary">Search</button>
+    </form>
+  </header>
+
+  <div class="equiv-title">Results</div>
+  <div class="grid" id="results">
+    <!-- пример одной карточки; твой скрипт будет сюда подставлять реальные -->
+    <article class="card">
+      <div class="thumb">
+        <img src="https://via.placeholder.com/120x120?text=Part" alt="">
+      </div>
+      <div class="body">
+        <div class="title">Example Washer Pump Assembly</div>
+        <div class="price">$79.95</div>
+        <div class="meta">OEM · Fits Samsung &amp; LG front loaders</div>
+        <div class="compat">Replaces: DC31-00123A, DC31-00123C, 4681EA2001T</div>
+        <div class="chips">
+          <span class="chip">Washer</span>
+          <span class="chip">Drain Pump</span>
+          <span class="chip">OEM</span>
+        </div>
+        <div class="links">
+          <a href="#">Sears</a>
+          <a href="#">RepairClinic</a>
+          <a href="#">APP</a>
+        </div>
+      </div>
+    </article>
+  </div>
+</main>
+</body>
+</html>
