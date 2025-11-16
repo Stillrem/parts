@@ -741,22 +741,12 @@ export const sources = [
 
       const image = absUrl(imgRaw, BASE_EBAY);
 
-      // ---- ЦЕНА ----
-      const priceRaw = t(
+      const priceText = t(
         el$.find('.s-item__price').text() ||
         el$.find('[data-testid="item-price"]').text()
       );
 
-      // вытаскиваем только число: 45.99 / 45,99 / 45
-      let priceText = '';
-      if (priceRaw) {
-        const m = priceRaw.match(/[0-9]+(?:[.,][0-9]+)?/);
-        if (m) {
-          priceText = m[0].replace(',', '.'); // приводим 45,99 → 45.99
-        }
-      }
-
-      // PN ТОЛЬКО из заголовка (чтобы не было HTTPS)
+      // 🔧 БЕРЁМ PN ТОЛЬКО ИЗ ЗАГОЛОВКА (БЕЗ https-ссылки)
       const pn = pnText(title || q);
 
       out.push({
@@ -765,8 +755,8 @@ export const sources = [
         image,
         source: 'eBay',
         part_number: pn,
-        price: priceText,                 // например "45.99"
-        currency: priceText ? 'USD' : ''  // фронт покажет "45.99 USD"
+        price: priceText,
+        currency: priceText.includes('$') ? 'USD' : ''
       });
     }
 
@@ -801,9 +791,7 @@ export const sources = [
         link: `${BASE_EBAY}/sch/i.html?_nkw=${encodeURIComponent(q)}`,
         image: '',
         source: 'eBay',
-        part_number: pnText(q),
-        price: '',
-        currency: ''
+        part_number: pnText(q)
       }];
     }
 
