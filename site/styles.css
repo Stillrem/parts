@@ -72,7 +72,7 @@ body {
 
 .app-shell.glass-shell {
   position: relative;
-  max-width: 760px;            /* ширина рамки как в репорт-приложении */
+  max-width: 560px;            /* ширина рамки как в репорт-приложении */
   margin: 0 auto;
   min-height: 100svh;
 
