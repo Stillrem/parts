@@ -77,9 +77,9 @@ body {
   min-height: 100svh;
 
   padding:
-    calc(14px + env(safe-area-inset-top, 0px))
+    calc(8px + env(safe-area-inset-top, 0px))
     5vw
-    calc(18px + env(safe-area-inset-bottom, 0px));
+    calc(8px + env(safe-area-inset-bottom, 0px));
 
   border-radius: 22px;
   border: 1px solid var(--stroke);
@@ -108,7 +108,7 @@ body {
 /* ================== HEADER / TITLE ================== */
 
 .page-header {
-  padding: 10px 6px 14px;
+  padding: 6px 6px 10px;
   border-radius: 18px;
   background: var(--glass-2);
   border: 1px solid rgba(255, 255, 255, .22);
@@ -120,9 +120,9 @@ body {
 }
 
 .app-title {
-  margin: 0 0 10px;
+  margin: 0 0 6px;
   text-align: center;
-  font-size: 1.85rem;          /* компактнее, чем раньше */
+  font-size: 1.55rem;          /* компактнее, чем раньше */
   font-weight: 900;
   letter-spacing: .4px;
   color: transparent;
