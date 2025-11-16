@@ -708,101 +708,108 @@ export const sources = [
   },
 
       /* --- eBay --- */
-  {
-    name: 'eBay',
-    searchUrl: (q)=> `${BASE_EBAY}/sch/i.html?_nkw=${encodeURIComponent(q)}`,
-    parser: async (html, q)=>{
-      const $ = cheerio.load(html);
-      let out = [];
+{
+  name: 'eBay',
+  searchUrl: (q)=> `${BASE_EBAY}/sch/i.html?_nkw=${encodeURIComponent(q)}`,
+  parser: async (html, q)=>{
+    const $ = cheerio.load(html);
+    let out = [];
 
-      // Вспомогательная функция: из одного блока вытащить карточку
-      function pushFromBlock(el$) {
-        const linkEl =
-          el$.find('a.s-item__link[href]').first().length
-            ? el$.find('a.s-item__link[href]').first()
-            : el$.find('a[href*="/itm/"]').first();
+    // Вспомогательная функция: из одного блока вытащить карточку
+    function pushFromBlock(el$) {
+      const linkEl =
+        el$.find('a.s-item__link[href]').first().length
+          ? el$.find('a.s-item__link[href]').first()
+          : el$.find('a[href*="/itm/"]').first();
 
-        const href = linkEl.attr('href') || '';
-        if (!href) return;
+      const href = linkEl.attr('href') || '';
+      if (!href) return;
 
-        const link = absUrl(href, BASE_EBAY);
+      const link = absUrl(href, BASE_EBAY);
 
-        const title = first(
-          el$.find('.s-item__title').text(),
-          linkEl.attr('aria-label'),
-          linkEl.text()
-        );
+      const title = first(
+        el$.find('.s-item__title').text(),
+        linkEl.attr('aria-label'),
+        linkEl.text()
+      );
 
-        let imgRaw =
-          el$.find('img.s-item__image-img').attr('src') ||
-          el$.find('img').attr('data-src') ||
-          el$.find('img').attr('src') ||
-          '';
+      let imgRaw =
+        el$.find('img.s-item__image-img').attr('src') ||
+        el$.find('img').attr('data-src') ||
+        el$.find('img').attr('src') ||
+        '';
 
-        const image = absUrl(imgRaw, BASE_EBAY);
+      const image = absUrl(imgRaw, BASE_EBAY);
 
-        const priceText = t(
-          el$.find('.s-item__price').text() ||
-          el$.find('[data-testid="item-price"]').text()
-        );
-
-        const pn = pnText(`${title} ${link}`);
-
-        out.push({
-          title: t(title || q),
-          link,
-          image,
-          source: 'eBay',
-          part_number: pn,
-          price: priceText,
-          currency: priceText.includes('$') ? 'USD' : ''
-        });
+      // 🔹 ЦЕНА: берём из текста всего блока по шаблону "$45.99"
+      const blockText = t(el$.text());
+      let priceText = '';
+      const m = blockText.match(/\$\s*\d+(?:[.,]\d+)?/);
+      if (m) {
+        // убираем пробелы и приводим , → .
+        priceText = m[0].replace(/\s+/g, '').replace(',', '.'); // "$45.99"
       }
 
-      // 1) Классическая разметка
-      $('li.s-item').each((_, el) => {
-        pushFromBlock($(el));
-      });
+      // PN только из заголовка, чтобы не было HTTPS
+      const pn = pnText(title || q);
 
-      // 2) Иногда товары лежат в других контейнерах
-      if (!out.length) {
-        $('div.s-item__wrapper, [data-testid="item"]').each((_, el) => {
-          pushFromBlock($(el));
-        });
-      }
-
-      // 3) Жёсткий fallback: любые ссылки /itm/
-      if (!out.length) {
-        $('a[href*="/itm/"]').each((_, a) => {
-          const el$ = $(a).closest('li, div').length ? $(a).closest('li, div') : $(a);
-          pushFromBlock(el$);
-        });
-      }
-
-      // 4) Если совсем ничего или страница похожа на капчу — один fallback-элемент
-      const bodyText = $('body').text() || '';
-      if (
-        !out.length ||
-        /verify you are human|enable javascript to continue|captcha/i.test(bodyText)
-      ) {
-        out = [{
-          title: `Открыть поиск eBay: ${q}`,
-          link: `${BASE_EBAY}/sch/i.html?_nkw=${encodeURIComponent(q)}`,
-          image: '',
-          source: 'eBay',
-          part_number: pnText(q)
-        }];
-      }
-
-      const seen = new Set();
-      return out.filter(x => {
-        const k = x.link;
-        if (!k || seen.has(k)) return false;
-        seen.add(k);
-        return true;
+      out.push({
+        title: t(title || q),
+        link,
+        image,
+        source: 'eBay',
+        part_number: pn,
+        price: priceText,                 // например "$45.99"
+        currency: priceText ? 'USD' : ''
       });
     }
-  },
+
+    // 1) Классическая разметка
+    $('li.s-item').each((_, el) => {
+      pushFromBlock($(el));
+    });
+
+    // 2) Иногда товары лежат в других контейнерах
+    if (!out.length) {
+      $('div.s-item__wrapper, [data-testid="item"]').each((_, el) => {
+        pushFromBlock($(el));
+      });
+    }
+
+    // 3) Жёсткий fallback: любые ссылки /itm/
+    if (!out.length) {
+      $('a[href*="/itm/"]').each((_, a) => {
+        const el$ = $(a).closest('li, div').length ? $(a).closest('li, div') : $(a);
+        pushFromBlock(el$);
+      });
+    }
+
+    // 4) Если совсем ничего или страница похожа на капчу — один fallback-элемент
+    const bodyText = $('body').text() || '';
+    if (
+      !out.length ||
+      /verify you are human|enable javascript to continue|captcha/i.test(bodyText)
+    ) {
+      out = [{
+        title: `Открыть поиск eBay: ${q}`,
+        link: `${BASE_EBAY}/sch/i.html?_nkw=${encodeURIComponent(q)}`,
+        image: '',
+        source: 'eBay',
+        part_number: pnText(q),
+        price: '',
+        currency: ''
+      }];
+    }
+
+    const seen = new Set();
+    return out.filter(x => {
+      const k = x.link;
+      if (!k || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }
+},
 
     /* --- Amazon --- */
   {
