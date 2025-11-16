@@ -743,25 +743,21 @@ export const sources = [
 
       // ---- ЦЕНА ----
       const priceRaw = t(
-        el$.find('.s-item__price').first().text() ||
-        el$.find('[data-testid="item-price"]').first().text()
+        el$.find('.s-item__price').text() ||
+        el$.find('[data-testid="item-price"]').text()
       );
 
-      // только цифры + точка/запятая
-      let priceNum = priceRaw.replace(/[^0-9.,]/g, '');
-      priceNum = priceNum.replace(',', '.');
-      if (!priceNum) priceNum = '';
-
-      // ---- Part number без HTTPS/HTTP/WWW ----
-      const pn = (() => {
-        const upper = `${title || ''} ${link || ''}`.toUpperCase();
-        const matches = upper.match(/[A-Z0-9\-]{5,}/g) || [];
-        for (const m of matches) {
-          if (m === 'HTTPS' || m === 'HTTP' || m === 'WWW') continue;
-          return m;
+      // вытаскиваем только число: 45.99 / 45,99 / 45
+      let priceText = '';
+      if (priceRaw) {
+        const m = priceRaw.match(/[0-9]+(?:[.,][0-9]+)?/);
+        if (m) {
+          priceText = m[0].replace(',', '.'); // приводим 45,99 → 45.99
         }
-        return '';
-      })();
+      }
+
+      // PN ТОЛЬКО из заголовка (чтобы не было HTTPS)
+      const pn = pnText(title || q);
 
       out.push({
         title: t(title || q),
@@ -769,8 +765,8 @@ export const sources = [
         image,
         source: 'eBay',
         part_number: pn,
-        price: priceNum,               // например "45.99"
-        currency: priceNum ? 'USD' : ''// фронт сам добавит $/USD как у других
+        price: priceText,                 // например "45.99"
+        currency: priceText ? 'USD' : ''  // фронт покажет "45.99 USD"
       });
     }
 
@@ -794,8 +790,12 @@ export const sources = [
       });
     }
 
-    // 4) Если совсем ничего не распарсили — один fallback-элемент "открыть поиск"
-    if (!out.length) {
+    // 4) Если совсем ничего или страница похожа на капчу — один fallback-элемент
+    const bodyText = $('body').text() || '';
+    if (
+      !out.length ||
+      /verify you are human|enable javascript to continue|captcha/i.test(bodyText)
+    ) {
       out = [{
         title: `Открыть поиск eBay: ${q}`,
         link: `${BASE_EBAY}/sch/i.html?_nkw=${encodeURIComponent(q)}`,
