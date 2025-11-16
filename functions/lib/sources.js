@@ -746,20 +746,8 @@ export const sources = [
         el$.find('[data-testid="item-price"]').text()
       );
 
-      // PN из текста (запасной вариант)
-const pnText = (s)=>{
-  const upper   = String(s || '').toUpperCase();
-  const matches = upper.match(/[A-Z0-9\-]{5,}/g) || [];
-
-  for (const m of matches) {
-    // отбрасываем технические слова, которые не могут быть парт-номером
-    if (m === 'HTTPS' || m === 'HTTP' || m === 'WWW' || m === 'EBAY' || m === 'COM') {
-      continue;
-    }
-    return m;
-  }
-  return '';
-};
+      // 🔧 БЕРЁМ PN ТОЛЬКО ИЗ ЗАГОЛОВКА (БЕЗ https-ссылки)
+      const pn = pnText(title || q);
 
       out.push({
         title: t(title || q),
