@@ -566,9 +566,9 @@ export const sources = [
   searchUrl: (q)=> `${BASE_PS}/Search.aspx?SearchText=${encodeURIComponent(q)}`,
   parser: async (html, q)=>{
     const $ = cheerio.load(html);
-    const out = [];
+    let out = [];
 
-    // 1. Основные контейнеры (старые + новые варианты)
+    // 1. Основные контейнеры (старые + новые варианты страниц поиска)
     const containers = $(
       '.search-result, ' +
       '.ps-product-list__item, ' +
@@ -618,13 +618,19 @@ export const sources = [
       });
     });
 
-    // 2. Fallback: если вдруг ничего не нашли по контейнерам —
-    // пробуем просто любые ссылки на PartSelect с PN
+    // 2. Если это не страница поиска, а модельная страница /Models/...,
+    // контейнеры выше могут ничего не найти.
+    // Тогда пробуем вытащить все ссылки на детали по шаблону /PS123456-... или PartDetail.aspx
     if (!out.length) {
-      $('a[href*="partselect.com"]').each((_, a)=>{
+      $('a[href]').each((_, a)=>{
         const a$ = $(a);
         const href = a$.attr('href') || '';
         if (!href) return;
+
+        // Деталь PartSelect обычно выглядит так:
+        //   /PS5136124-Whirlpool-W10536347-Drain-Pump-Assembly.htm
+        // или через PartDetail.aspx
+        if (!/\/PS\d+/i.test(href) && !/PartDetail\.aspx/i.test(href)) return;
 
         const link = absUrl(href, BASE_PS);
         const title = t(a$.text()) || link;
@@ -633,14 +639,14 @@ export const sources = [
         out.push({
           title,
           link,
-          image: '',
+          image: '',          // картинку можно добить позже, хотя бы будет ссылка
           source: 'PartSelect',
           part_number: pn
         });
       });
     }
 
-    // 3. Если всё равно пусто — хотя бы "Открыть поиск"
+    // 3. Старый фолбэк "Открыть поиск", если вообще ничего не нашли
     if (!out.length && q){
       out.push({
         title: `Открыть поиск PartSelect: ${q}`,
@@ -652,12 +658,14 @@ export const sources = [
     }
 
     const seen = new Set();
-    return out.filter(x=>{
+    out = out.filter(x=>{
       const k = x.link;
       if (!k || seen.has(k)) return false;
       seen.add(k);
       return true;
     });
+
+    return out;
   }
 },
 
