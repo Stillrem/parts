@@ -746,7 +746,18 @@ export const sources = [
           el$.find('[data-testid="item-price"]').text()
         );
 
-        const pn = pnText(`${title} ${link}`);
+        // PN из текста (запасной вариант)
+        const pnText = (s)=>{
+        const upper = String(s || '').toUpperCase();
+        const matches = upper.match(/[A-Z0-9\-]{5,}/g) || [];
+
+        for (const m of matches) {
+        // отбрасываем технические слова из URL
+        if (m === 'HTTPS' || m === 'HTTP' || m === 'WWW') continue;
+        return m;
+       }
+        return '';
+      };
 
         out.push({
           title: t(title || q),
