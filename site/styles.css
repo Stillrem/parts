@@ -74,6 +74,8 @@ body {
   position: relative;
   max-width: 760px;            /* ширина рамки как в репорт-приложении */
   margin: 0 auto;
+  /* опускаем нижнюю границу рамки до home-bar */
+  margin-bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
   min-height: 100svh;
 
   padding:
