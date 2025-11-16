@@ -741,12 +741,22 @@ export const sources = [
 
       const image = absUrl(imgRaw, BASE_EBAY);
 
-      const priceText = t(
-        el$.find('.s-item__price').text() ||
-        el$.find('[data-testid="item-price"]').text()
+      // ---- ЦЕНА ----
+      const priceRaw = t(
+        el$.find('.s-item__price').first().text() ||
+        el$.find('[data-testid="item-price"]').first().text() ||
+        (el$.find('span[aria-label*="$"]').first().attr('aria-label') || '')
       );
 
-      // 🔧 БЕРЁМ PN ТОЛЬКО ИЗ ЗАГОЛОВКА (БЕЗ https-ссылки)
+      // оставляем только числа, точку и запятую
+      let priceNum = priceRaw.replace(/[^0-9.,]/g, '');
+      // приводим запятую к точке
+      priceNum = priceNum.replace(',', '.');
+
+      // если после чистки ничего не осталось — не ставим цену
+      if (!priceNum) priceNum = '';
+
+      // ---- Part number ----
       const pn = pnText(title || q);
 
       out.push({
@@ -755,8 +765,8 @@ export const sources = [
         image,
         source: 'eBay',
         part_number: pn,
-        price: priceText,
-        currency: priceText.includes('$') ? 'USD' : ''
+        price: priceNum,                // например "45.99"
+        currency: priceNum ? 'USD' : '' // чтобы фронт показал "$45.99 USD"
       });
     }
 
@@ -791,7 +801,9 @@ export const sources = [
         link: `${BASE_EBAY}/sch/i.html?_nkw=${encodeURIComponent(q)}`,
         image: '',
         source: 'eBay',
-        part_number: pnText(q)
+        part_number: pnText(q),
+        price: '',
+        currency: ''
       }];
     }
 
