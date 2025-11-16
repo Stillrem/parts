@@ -20,14 +20,15 @@
   box-sizing: border-box;
 }
 
-html, body {
+html,
+body {
   height: 100%;
 }
 
 body {
   margin: 0;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Inter,
-               "Helvetica Neue", Arial, sans-serif;
+    "Helvetica Neue", Arial, sans-serif;
   color: var(--ink);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
@@ -72,16 +73,17 @@ body {
 
 .app-shell.glass-shell {
   position: relative;
-  max-width: 760px;            /* ширина рамки как в репорт-приложении */
+  max-width: 760px; /* ширина рамки */
   margin: 0 auto;
   /* опускаем нижнюю границу рамки до home-bar */
   margin-bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
+
   min-height: 100svh;
 
   padding:
-    calc(2px + env(safe-area-inset-top, 0px))
+    calc(10px + env(safe-area-inset-top, 0px))
     5vw
-    calc(2px + env(safe-area-inset-bottom, 0px));
+    calc(16px + env(safe-area-inset-bottom, 0px));
 
   border-radius: 22px;
   border: 1px solid var(--stroke);
@@ -96,7 +98,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  overflow: hidden;            /* рамка статична, скролл внутри */
+  overflow: hidden; /* рамка статична, скролл внутри */
 }
 
 /* чуть уже на широких экранах */
@@ -110,7 +112,7 @@ body {
 /* ================== HEADER / TITLE ================== */
 
 .page-header {
-  padding: 10px 6px 14px;
+  padding: 8px 6px 10px; /* шапка чуть ниже и компактнее */
   border-radius: 18px;
   background: var(--glass-2);
   border: 1px solid rgba(255, 255, 255, .22);
@@ -122,9 +124,9 @@ body {
 }
 
 .app-title {
-  margin: 0 0 6px;
+  margin: 0 0 8px;
   text-align: center;
-  font-size: 1.55rem;          /* компактнее, чем раньше */
+  font-size: 1.75rem; /* было 1.85rem */
   font-weight: 900;
   letter-spacing: .4px;
   color: transparent;
@@ -304,6 +306,7 @@ body {
 .export-btn {
   width: 100%;
   margin-top: 4px;
+  color: var(--ink);          /* чтобы текст не был синим */
 }
 
 /* ================== RESULTS / SCROLL ================== */
@@ -318,7 +321,7 @@ body {
   flex-direction: column;
   gap: 10px;
   flex: 1 1 auto;
-  overflow-y: auto;                    /* именно здесь прокрутка */
+  overflow-y: auto;            /* именно здесь прокрутка */
   -webkit-overflow-scrolling: touch;
 }
 
