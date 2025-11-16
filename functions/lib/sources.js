@@ -469,48 +469,46 @@ export const sources = [
     const $ = cheerio.load(html);
     const out = [];
 
-    // нормализованный запрос, чтобы узнавать модель в ссылках
-    const qNorm = String(q || '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, '');
+    // нормализуем запрос модели (DV210AEW → DV210AEW)
+    const qModelRaw = String(q || '').toUpperCase().trim();
+    const qModel = qModelRaw.replace(/[^A-Z0-9]/g, '');
 
-    // разные возможные контейнеры результатов
     $('.searchProduct, .list-item, .product-list-item, .product').each((_, el)=>{
       const el$ = $(el);
 
-      // --- умный выбор ссылки ---
-      let hrefPreferred = '';
-      let hrefModel     = '';
-      let hrefAny       = '';
+      let bestHref = '';
+      let fallbackHref = '';
 
       el$.find('a[href]').each((_, a) => {
         const h = $(a).attr('href') || '';
-        if (!h) return;
-        const hl = h.toLowerCase();
+        if (!h || h === '/parts.html') return;
 
-        // 1) ссылки вида /parts-for-lg-wm3770hwa-00.html
-        if (!hrefPreferred && /parts-for-/i.test(h)) {
-          hrefPreferred = h;
+        const cleanH = h.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+        // 1) идеальная ссылка: /parts-for-*
+        if (/\/parts-for-/i.test(h)) {
+
+          // сравнение по началу: DV210AEW совпадает с DV210AEWXAA
+          if (!qModel || cleanH.startsWith(qModel)) {
+            bestHref = h;
+            return false;
+          }
         }
 
-        // 2) ссылки, содержащие модель из запроса
-        if (!hrefModel && qNorm && hl.includes(qNorm)) {
-          hrefModel = h;
+        // 2) запасной вариант
+        if (!fallbackHref) {
+          fallbackHref = h;
         }
-
-        // 3) просто первая попавшаяся (fallback)
-        if (!hrefAny) hrefAny = h;
       });
 
-      const href = hrefPreferred || hrefModel || hrefAny;
-      if (!href) return;
+      const finalHref = bestHref || fallbackHref;
+      if (!finalHref) return;
 
-      const link = absUrl(href, BASE_APP);
+      const link = absUrl(finalHref, BASE_APP);
 
       const title = first(
         el$.find('.productname, .searchProductTitle').text(),
         el$.find('h2, h3').first().text(),
-        el$.find('a[href]').first().attr('title'),
         el$.text()
       );
 
