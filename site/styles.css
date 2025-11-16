@@ -11,7 +11,8 @@
   --shadow: rgba(0,0,0,.80);
 }
 
-/* Базовые стили */
+/* БАЗА */
+
 *,
 *::before,
 *::after {
@@ -26,8 +27,9 @@ body {
 body {
   margin: 0;
   padding: 10px 10px 18px;
-  font-family: ui-sans-serif, system-ui, -apple-system, "SF Pro Text",
-               "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, "SF Pro Text",
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   color: var(--ink);
   background: var(--bg);
   display: flex;
@@ -37,7 +39,7 @@ body {
   overflow-x: hidden;
 }
 
-/* Фон: лес под всем */
+/* Фон-лес под всем */
 body::before {
   content: "";
   position: fixed;
@@ -51,7 +53,7 @@ body::before {
   z-index: -3;
 }
 
-/* Большое матовое стекло, которое “накрывает” картинку */
+/* Большая матовая рамка-стекло от верха до низа */
 body::after {
   content: "";
   position: fixed;
@@ -71,7 +73,8 @@ body::after {
   z-index: -1;
 }
 
-/* Контейнеры заголовка и контента */
+/* Контейнеры */
+
 header,
 main {
   width: 100%;
@@ -89,7 +92,7 @@ main {
   overflow-y: auto;
 }
 
-/* ========= ШАПКА ========= */
+/* ========= ЗАГОЛОВОК ========= */
 
 header h1 {
   margin: 0 0 12px;
@@ -114,18 +117,19 @@ header h1 {
     0 1px 0 rgba(255,255,255,.35);
 }
 
-/* Форма поиска в стиле “liquid glass” */
+/* ========= ФОРМА ПОИСКА ========= */
 
 #searchForm {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   grid-template-areas:
-    "q q"
-    "search search"
-    "supplier supplier"
-    "oem inStock"
-    "export export";
-  gap: 10px 14px;
+    "q"
+    "search"
+    "supplier"
+    "oem"
+    "inStock"
+    "export";
+  gap: 10px;
   align-items: center;
 
   padding: 18px 14px 16px;
@@ -139,7 +143,8 @@ header h1 {
     inset 0 -1px 0 rgba(0,0,0,.40);
 }
 
-/* Поле поиска */
+/* Поле ввода */
+
 #q {
   grid-area: q;
   width: 100%;
@@ -164,15 +169,15 @@ header h1 {
   color: rgba(191,214,205,.85);
 }
 
-/* Кнопка “Искать” — большая градиентная таблетка */
+/* Кнопка “Искать” */
+
 #searchForm button[type="submit"] {
   grid-area: search;
   width: 100%;
   border-radius: 999px;
   padding: 13px 18px;
   border: 1px solid rgba(255,255,255,.38);
-  background:
-    linear-gradient(135deg, var(--primary), var(--primary-2));
+  background: linear-gradient(135deg, var(--primary), var(--primary-2));
   color: #081513;
   font-weight: 800;
   font-size: 15px;
@@ -192,7 +197,8 @@ header h1 {
   filter: brightness(.97);
 }
 
-/* Поставщик – подпись сверху, селект снизу */
+/* Поставщик — аккуратный вертикальный блок */
+
 #searchForm .inline:nth-of-type(1) {
   grid-area: supplier;
   display: flex;
@@ -206,13 +212,15 @@ header h1 {
   width: 100%;
 }
 
-/* Общий стиль для селекта поставщика */
 #supplier {
   border-radius: 999px;
   padding: 12px 18px;
   border: 1px solid rgba(255,255,255,.32);
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.20), rgba(255,255,255,.06));
+  background: linear-gradient(
+    180deg,
+    rgba(255,255,255,.20),
+    rgba(255,255,255,.06)
+  );
   backdrop-filter: blur(12px) saturate(150%);
   -webkit-backdrop-filter: blur(12px) saturate(150%);
   color: var(--ink);
@@ -222,7 +230,8 @@ header h1 {
     inset 0 -1px 0 rgba(0,0,0,.40);
 }
 
-/* Чекбоксы — аккуратный ряд */
+/* Чекбоксы — по одному в строке */
+
 #searchForm .inline:nth-of-type(2),
 #searchForm .inline:nth-of-type(3) {
   display: inline-flex;
@@ -232,30 +241,28 @@ header h1 {
   color: rgba(233,247,242,.85);
 }
 
-#searchForm .inline:nth-of-type(2) {
-  grid-area: oem;
-}
+#searchForm .inline:nth-of-type(2) { grid-area: oem; }
+#searchForm .inline:nth-of-type(3) { grid-area: inStock; }
 
-#searchForm .inline:nth-of-type(3) {
-  grid-area: inStock;
-}
-
-/* Сами чекбоксы */
 #searchForm input[type="checkbox"] {
   width: 16px;
   height: 16px;
   border-radius: 4px;
 }
 
-/* Кнопка “Экспорт CSV” */
+/* Кнопка Экспорт CSV */
+
 #exportBtn {
   grid-area: export;
   width: 100%;
   border-radius: 999px;
   padding: 12px 18px;
   border: 1px solid rgba(255,255,255,.32);
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.12), rgba(0,0,0,.75));
+  background: linear-gradient(
+    180deg,
+    rgba(255,255,255,.12),
+    rgba(0,0,0,.75)
+  );
   color: #f4f5f7;
   font-weight: 700;
   font-size: 14px;
@@ -280,7 +287,6 @@ header h1 {
   display: none !important;
 }
 
-/* Блок эквивалентов сверху над карточками */
 #equivBox {
   margin-top: 6px;
   margin-bottom: 10px;
@@ -302,7 +308,6 @@ header h1 {
   color: rgba(233,247,242,.95);
 }
 
-/* Сетка с карточками результата */
 .grid,
 #resultsGrid {
   display: flex;
@@ -311,14 +316,16 @@ header h1 {
   margin-top: 4px;
 }
 
-/* Карточка результата поиска */
+/* Карточка результата */
+
 .card {
   display: flex;
   align-items: stretch;
   border-radius: 22px;
   overflow: hidden;
-  background: radial-gradient(circle at 0% 0%, rgba(82,224,165,.35), transparent 55%),
-              rgba(6,10,14,.88);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(82,224,165,.35), transparent 55%),
+    rgba(6,10,14,.88);
   border: 1px solid rgba(255,255,255,.30);
   backdrop-filter: blur(18px) saturate(160%);
   -webkit-backdrop-filter: blur(18px) saturate(160%);
@@ -328,6 +335,7 @@ header h1 {
 }
 
 /* Левая колонка с картинкой */
+
 .thumb {
   width: 110px;
   min-width: 110px;
@@ -345,6 +353,7 @@ header h1 {
 }
 
 /* Правая часть карточки */
+
 .body {
   flex: 1;
   padding: 12px 14px 12px;
@@ -377,7 +386,8 @@ header h1 {
   color: rgba(191,214,205,.85);
 }
 
-/* Чипы поставщика / бейджики */
+/* Чипы */
+
 .body .chips {
   margin-top: 6px;
   display: flex;
@@ -391,11 +401,16 @@ header h1 {
   font-size: 11px;
   font-weight: 600;
   color: #e9f7f2;
-  background: linear-gradient(180deg, rgba(255,255,255,.16), rgba(0,0,0,.65));
+  background: linear-gradient(
+    180deg,
+    rgba(255,255,255,.16),
+    rgba(0,0,0,.65)
+  );
   border: 1px solid rgba(255,255,255,.24);
 }
 
-/* Кнопки-ссылки внизу карточки */
+/* Кнопки-ссылки */
+
 .body .links {
   margin-top: 8px;
   display: flex;
@@ -408,7 +423,11 @@ header h1 {
   padding: 7px 12px;
   border-radius: 999px;
   border: 1px solid rgba(255,255,255,.28);
-  background: linear-gradient(180deg, rgba(255,255,255,.16), rgba(0,0,0,.75));
+  background: linear-gradient(
+    180deg,
+    rgba(255,255,255,.16),
+    rgba(0,0,0,.75)
+  );
   font-size: 12px;
   font-weight: 600;
   color: #f2f5f7;
@@ -444,7 +463,8 @@ header h1 {
   }
 }
 
-/* Фолбэк, если нет поддержки backdrop-filter */
+/* Фолбэк, если нет backdrop-filter */
+
 @supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
   #searchForm,
   body::after,
