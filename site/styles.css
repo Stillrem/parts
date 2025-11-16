@@ -1,22 +1,17 @@
-/* ====== ТЕМА / ПЕРЕМЕННЫЕ ====== */
+/* ========= ТЕМА ========= */
 :root {
-  --primary: #45e0a3;
-  --primary-2: #37c6f0;
-  --ink: #f4fbff;
-  --muted: #c0d6e0;
-  --bg: #05070a;
-
-  --glass: rgba(255, 255, 255, 0.06);
-  --glass-strong: rgba(255, 255, 255, 0.09);
-  --border: rgba(255, 255, 255, 0.26);
-  --border-soft: rgba(255, 255, 255, 0.18);
-  --shadow: rgba(0, 0, 0, 0.55);
-
-  /* поставь сюда свой фон, если нужно: */
-  --bg-image: url("/IMG_0463.png");
+  --primary: #52E0A5;
+  --primary-2: #3AC7E0;
+  --ink: #E9F7F2;
+  --muted: #BFD6CD;
+  --bg: #05090b;
+  --glass: rgba(255,255,255,.08);
+  --glass-2: rgba(255,255,255,.06);
+  --stroke: rgba(255,255,255,.32);
+  --shadow: rgba(0,0,0,.80);
 }
 
-/* ====== БАЗА ====== */
+/* БАЗА */
 
 *,
 *::before,
@@ -31,392 +26,450 @@ body {
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, "SF Pro Text", "Segoe UI", Roboto,
-    sans-serif;
+  padding: 10px 10px 18px;
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, "SF Pro Text",
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   color: var(--ink);
-  background:
-    radial-gradient(1200px 800px at 70% -10%, rgba(255, 255, 255, 0.05) 0%, transparent 60%),
-    radial-gradient(900px 600px at 10% 110%, rgba(0, 128, 128, 0.28) 0%, transparent 65%),
-    var(--bg);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
-/* фото в фоне */
+/* Фон-лес под всем */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
-  background-image: var(--bg-image);
-  background-size: cover;
-  background-position: center;
-  filter: contrast(0.92) saturate(0.95) brightness(0.7);
+  background:
+    radial-gradient(1200px 800px at 70% -10%, rgba(255,255,255,.08) 0%, transparent 60%),
+    radial-gradient(900px 500px at 10% 110%, rgba(122,255,194,.05) 0%, transparent 60%),
+    url("IMG_0463.png") center/cover no-repeat;
+  filter: contrast(.9) saturate(.9) brightness(.65);
   opacity: 0.9;
-  z-index: -2;
+  z-index: -3;
 }
 
-/* лёгкая «дымка» поверх фото */
+/* Большая матовая рамка-стекло от верха до низа */
 body::after {
   content: "";
   position: fixed;
-  inset: 0;
-  background:
-    radial-gradient(1200px 900px at 50% -10%, rgba(255, 255, 255, 0.16), transparent 60%),
-    radial-gradient(1200px 900px at 50% 110%, rgba(0, 0, 0, 0.7), transparent 60%);
-  mix-blend-mode: screen;
-  opacity: 0.8;
+  left: 8px;
+  right: 8px;
+  top: 8px;
+  bottom: 8px;
+  border-radius: 26px;
+  background: rgba(5, 10, 12, .65);
+  border: 1px solid rgba(255,255,255,.26);
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.25),
+    inset 0 -1px 0 rgba(255,255,255,.12),
+    0 26px 52px -26px var(--shadow);
   z-index: -1;
 }
 
-/* чтобы рамка не обрезалась снизу на разных телефонах */
-.app-shell {
-  position: relative;
-  margin: 10px;
-  min-height: calc(100svh - 20px);
-  display: flex;
-  flex-direction: column;
+/* Контейнеры */
+
+header,
+main {
+  width: 100%;
+  max-width: 780px;
+  margin: 0 auto;
 }
 
-/* большая стеклянная рамка */
-.glass-shell {
-  border-radius: 28px;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.65));
-  border: 1px solid var(--border);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.08),
-    0 24px 50px -24px var(--shadow);
-  backdrop-filter: blur(22px) saturate(180%);
-  -webkit-backdrop-filter: blur(22px) saturate(180%);
-  padding: 18px 14px 14px;
+header {
+  padding: 18px 18px 8px;
 }
 
-/* если вдруг нет backdrop-filter */
-@supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
-  .glass-shell {
-    background: rgba(15, 18, 22, 0.94);
-  }
+main {
+  padding: 0 18px 18px;
+  flex: 1;
+  overflow-y: auto;
 }
 
-/* ====== ШАПКА ====== */
+/* ========= ЗАГОЛОВОК ========= */
 
-.page-header {
-  padding: 4px 6px 10px;
-}
-
-.app-title {
-  margin: 4px 0 14px;
-  font-size: 1.9rem;
-  line-height: 1.2;
+header h1 {
+  margin: 0 0 12px;
+  font-size: 26px;
   font-weight: 900;
-  letter-spacing: 0.3px;
+  letter-spacing: .4px;
+  text-align: left;
   color: transparent;
+
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(255, 255, 255, 0.6) 40%, rgba(255, 255, 255, 0.14) 80%),
-    radial-gradient(120% 200% at 0% 0%, rgba(140, 255, 214, 0.6), transparent 45%);
+    linear-gradient(
+      180deg,
+      rgba(255,255,255,.96),
+      rgba(255,255,255,.60) 45%,
+      rgba(255,255,255,.20) 90%
+    );
   -webkit-background-clip: text;
   background-clip: text;
-  -webkit-text-stroke: 1px rgba(0, 0, 0, 0.55);
+  -webkit-text-stroke: 1px rgba(255,255,255,.30);
   text-shadow:
-    0 2px 12px rgba(0, 0, 0, 0.75),
-    0 1px 0 rgba(255, 255, 255, 0.3);
+    0 2px 10px rgba(0,0,0,.60),
+    0 1px 0 rgba(255,255,255,.35);
 }
 
-/* ====== ФОРМА ПОИСКА ====== */
+/* ========= ФОРМА ПОИСКА ========= */
 
-.search-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-/* первый ряд: input + кнопка */
-.search-main-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(120px, 0.9fr);
-  gap: 10px;
-  align-items: center;
-}
-
-/* общий стиль стеклянных блоков */
-.field-wrapper,
-.select-wrapper,
-.export-btn {
-  border-radius: 22px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(0, 0, 0, 0.72));
-  border: 1px solid var(--border-soft);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.24),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.5);
-}
-
-/* инпут поиска */
-#q {
-  width: 100%;
-  border: none;
-  outline: none;
-  padding: 13px 18px;
-  border-radius: 22px;
-  background: transparent;
-  color: var(--ink);
-  font-size: 16px; /* ≥16px чтобы iOS не зумил */
-  font-weight: 500;
-}
-
-/* placeholder мягкий */
-#q::placeholder {
-  color: rgba(235, 244, 248, 0.7);
-}
-
-/* Кнопка поиска */
-.btn-primary {
-  border-radius: 22px;
-  border: none;
-  cursor: pointer;
-  font-size: 16px; /* тоже ≥16px */
-  font-weight: 700;
-  letter-spacing: 0.3px;
-  padding: 13px 10px;
-  color: #021313;
-  background-image:
-    linear-gradient(135deg, var(--primary), var(--primary-2));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.4),
-    0 14px 34px -18px rgba(0, 0, 0, 0.9),
-    0 0 0 1px rgba(255, 255, 255, 0.24);
-  transition: transform 0.08s ease, box-shadow 0.15s ease, filter 0.1s ease;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.btn-primary:active {
-  transform: translateY(1px);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.2),
-    0 6px 16px -10px rgba(0, 0, 0, 0.9);
-}
-
-/* ====== ФИЛЬТРЫ ====== */
-
-.filters-block {
-  margin-top: 4px;
-}
-
-.filters-column {
+#searchForm {
   display: grid;
   grid-template-columns: 1fr;
+  grid-template-areas:
+    "q"
+    "search"
+    "supplier"
+    "oem"
+    "inStock"
+    "export";
   gap: 10px;
-}
-
-/* подпись "Поставщик" */
-.field-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--muted);
-  padding-left: 4px;
-}
-
-/* селект */
-.select-wrapper select {
-  width: 100%;
-  border: none;
-  outline: none;
-  padding: 12px 40px 12px 16px;
-  border-radius: 22px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(0, 0, 0, 0.78));
-  color: var(--ink);
-  font-size: 16px;
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23b7d3e0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
-  background-repeat: no-repeat;
-  background-position: right 14px center;
-  background-size: 18px;
-}
-
-/* строки чекбоксов */
-.check-row {
-  display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 4px 2px 0;
-  font-size: 14px;
-  color: var(--ink);
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
 
-.check-row input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--primary);
-}
-
-/* ====== КНОПКА ЭКСПОРТА ====== */
-
-.btn-secondary {
-  border-radius: 24px;
-  border: 1px solid var(--border-soft);
-  background:
-    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.16), transparent 55%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(0, 0, 0, 0.85));
-  color: var(--ink);
-  font-size: 16px;
-  font-weight: 700;
-  padding: 13px 16px;
-  cursor: pointer;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.25),
-    0 16px 34px -22px rgba(0, 0, 0, 0.9);
-  -webkit-tap-highlight-color: transparent;
-  width: 100%;
-}
-
-.btn-secondary:active {
-  transform: translateY(1px);
-}
-
-/* ====== ОСНОВНОЙ КОНТЕНТ / РЕЗУЛЬТАТЫ ====== */
-
-.page-main {
-  flex: 1;
-  margin: 6px 2px 0;
-  padding-bottom: 4px;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* блок с эквивалентами */
-.equiv-box {
-  margin-bottom: 10px;
-  padding: 10px 12px;
-  border-radius: 18px;
-  background: var(--glass-strong);
-  border: 1px solid var(--border-soft);
+  padding: 18px 14px 16px;
+  border-radius: 22px;
+  background: var(--glass);
+  border: 1px solid var(--stroke);
   backdrop-filter: blur(18px) saturate(160%);
   -webkit-backdrop-filter: blur(18px) saturate(160%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    0 18px 32px -24px var(--shadow);
-  font-size: 14px;
+    inset 0 1px 0 rgba(255,255,255,.28),
+    inset 0 -1px 0 rgba(0,0,0,.40);
 }
 
-.equiv-title {
-  font-weight: 600;
-  margin-bottom: 6px;
-  color: var(--muted);
+/* Поле ввода */
+
+#q {
+  grid-area: q;
+  width: 100%;
+  border-radius: 999px;
+  padding: 13px 18px;
+  border: 1px solid rgba(255,255,255,.32);
+  background: linear-gradient(
+    180deg,
+    rgba(255,255,255,.20),
+    rgba(255,255,255,.06)
+  );
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  color: var(--ink);
+  font-size: 14px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.35),
+    inset 0 -1px 0 rgba(0,0,0,.40);
 }
+
+#q::placeholder {
+  color: rgba(191,214,205,.85);
+}
+
+/* Кнопка “Искать” */
+
+#searchForm button[type="submit"] {
+  grid-area: search;
+  width: 100%;
+  border-radius: 999px;
+  padding: 13px 18px;
+  border: 1px solid rgba(255,255,255,.38);
+  background: linear-gradient(135deg, var(--primary), var(--primary-2));
+  color: #081513;
+  font-weight: 800;
+  font-size: 15px;
+  cursor: pointer;
+  letter-spacing: .3px;
+  box-shadow:
+    0 14px 30px -16px rgba(82,224,165,.9),
+    inset 0 1px 0 rgba(255,255,255,.35);
+  transition: transform .07s ease, box-shadow .15s ease, filter .15s ease;
+}
+
+#searchForm button[type="submit"]:active {
+  transform: translateY(1px);
+  box-shadow:
+    0 8px 18px -12px rgba(82,224,165,.8),
+    inset 0 1px 0 rgba(255,255,255,.30);
+  filter: brightness(.97);
+}
+
+/* Поставщик — аккуратный вертикальный блок */
+
+#searchForm .inline:nth-of-type(1) {
+  grid-area: supplier;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: rgba(233,247,242,.9);
+}
+
+#searchForm .inline:nth-of-type(1) > select {
+  width: 100%;
+}
+
+#supplier {
+  border-radius: 999px;
+  padding: 12px 18px;
+  border: 1px solid rgba(255,255,255,.32);
+  background: linear-gradient(
+    180deg,
+    rgba(255,255,255,.20),
+    rgba(255,255,255,.06)
+  );
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  color: var(--ink);
+  font-size: 14px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.35),
+    inset 0 -1px 0 rgba(0,0,0,.40);
+}
+
+/* Чекбоксы — по одному в строке */
+
+#searchForm .inline:nth-of-type(2),
+#searchForm .inline:nth-of-type(3) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: rgba(233,247,242,.85);
+}
+
+#searchForm .inline:nth-of-type(2) { grid-area: oem; }
+#searchForm .inline:nth-of-type(3) { grid-area: inStock; }
+
+#searchForm input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+}
+
+/* Кнопка Экспорт CSV */
+
+#exportBtn {
+  grid-area: export;
+  width: 100%;
+  border-radius: 999px;
+  padding: 12px 18px;
+  border: 1px solid rgba(255,255,255,.32);
+  background: linear-gradient(
+    180deg,
+    rgba(255,255,255,.12),
+    rgba(0,0,0,.75)
+  );
+  color: #f4f5f7;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow:
+    0 10px 24px -16px rgba(0,0,0,.9),
+    inset 0 1px 0 rgba(255,255,255,.25);
+  transition: transform .07s ease, box-shadow .15s ease, filter .15s ease;
+}
+
+#exportBtn:active {
+  transform: translateY(1px);
+  box-shadow:
+    0 6px 14px -10px rgba(0,0,0,.9),
+    inset 0 1px 0 rgba(255,255,255,.2);
+  filter: brightness(.96);
+}
+
+/* ========= ЭКВИВАЛЕНТЫ / РЕЗУЛЬТАТЫ ========= */
 
 .hidden {
   display: none !important;
 }
 
-/* сетка карточек */
-.grid {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-bottom: 10px;
+#equivBox {
+  margin-top: 6px;
+  margin-bottom: 10px;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: var(--glass-2);
+  border: 1px solid rgba(255,255,255,.24);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.25),
+    inset 0 -1px 0 rgba(0,0,0,.35);
+  font-size: 13px;
 }
 
-/* ====== КАРТОЧКИ РЕЗУЛЬТАТОВ ====== */
+.equiv-title {
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: rgba(233,247,242,.95);
+}
+
+.grid,
+#resultsGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+/* Карточка результата */
 
 .card {
   display: flex;
   align-items: stretch;
-  min-height: 96px;
-  border-radius: 20px;
+  border-radius: 22px;
   overflow: hidden;
-}
-
-/* более «стеклянные» карточки и чуть меньше высота,
-   чтобы больше штук помещалось на экран */
-.glass-card {
   background:
-    linear-gradient(135deg, rgba(0, 0, 0, 0.86), rgba(0, 20, 27, 0.96));
-  border: 1px solid var(--border-soft);
+    radial-gradient(circle at 0% 0%, rgba(82,224,165,.35), transparent 55%),
+    rgba(6,10,14,.88);
+  border: 1px solid rgba(255,255,255,.30);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 18px 38px -20px var(--shadow);
-  backdrop-filter: blur(18px) saturate(170%);
-  -webkit-backdrop-filter: blur(18px) saturate(170%);
+    inset 0 1px 0 rgba(255,255,255,.25),
+    0 18px 40px -20px rgba(0,0,0,.85);
 }
 
-/* превью слева */
+/* Левая колонка с картинкой */
+
 .thumb {
-  flex: 0 0 88px;
-  max-width: 88px;
-  background: radial-gradient(circle at 0 0, rgba(124, 255, 212, 0.3), transparent 60%);
+  width: 110px;
+  min-width: 110px;
+  background: linear-gradient(180deg, #1f4337, #0c1517);
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
 }
 
 .thumb img {
+  display: block;
   width: 100%;
-  height: 100%;
+  height: auto;
   object-fit: cover;
 }
 
-/* тело карточки */
-.card .body {
+/* Правая часть карточки */
+
+.body {
   flex: 1;
-  padding: 10px 12px 10px;
+  padding: 12px 14px 12px;
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-/* заголовок и текст внутри карточки — чуть компактнее */
-.card .title {
-  font-size: 14px;
-  font-weight: 600;
+.body .title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #f5f7f9;
+  margin-bottom: 2px;
 }
 
-.card .meta,
-.card .compat {
+.body .meta {
+  font-size: 13px;
+  color: rgba(191,214,205,.90);
+}
+
+.body .price {
+  font-size: 14px;
+  font-weight: 700;
+  margin-top: 4px;
+  color: var(--primary-2);
+}
+
+.body .compat {
   font-size: 12px;
-  color: var(--muted);
+  color: rgba(191,214,205,.85);
 }
 
-.card .price {
-  font-size: 14px;
-  font-weight: 600;
-  margin-top: 2px;
-}
+/* Чипы */
 
-/* чипы и ссылки — компактно */
-.card .chips,
-.card .links {
+.body .chips {
+  margin-top: 6px;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 4px;
 }
 
-.card .chips > *,
-.card .links > * {
+.body .chips span {
+  padding: 5px 10px;
   border-radius: 999px;
-  padding: 4px 8px;
   font-size: 11px;
-  border: 1px solid rgba(255, 255, 255, 0.26);
-  background: rgba(255, 255, 255, 0.04);
+  font-weight: 600;
+  color: #e9f7f2;
+  background: linear-gradient(
+    180deg,
+    rgba(255,255,255,.16),
+    rgba(0,0,0,.65)
+  );
+  border: 1px solid rgba(255,255,255,.24);
 }
 
-/* ====== АДАПТИВ ====== */
+/* Кнопки-ссылки */
 
-@media (min-width: 768px) {
-  .app-shell {
-    margin: 18px auto;
-    max-width: 900px;
+.body .links {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.body .links a,
+.body .links button {
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.28);
+  background: linear-gradient(
+    180deg,
+    rgba(255,255,255,.16),
+    rgba(0,0,0,.75)
+  );
+  font-size: 12px;
+  font-weight: 600;
+  color: #f2f5f7;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow:
+    0 8px 18px -12px rgba(0,0,0,.9),
+    inset 0 1px 0 rgba(255,255,255,.25);
+}
+
+/* ========= АДАПТИВ ========= */
+
+@media (min-width: 720px) {
+  header {
+    padding-top: 22px;
   }
 
-  .page-header {
-    padding-inline: 12px;
+  header h1 {
+    font-size: 28px;
   }
 
-  .page-main {
-    padding-inline: 8px;
+  #searchForm {
+    padding: 20px 20px 18px;
+  }
+
+  .thumb {
+    width: 140px;
+    min-width: 140px;
+  }
+
+  .body {
+    padding: 14px 16px 14px;
+  }
+}
+
+/* Фолбэк, если нет backdrop-filter */
+
+@supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
+  #searchForm,
+  body::after,
+  #equivBox,
+  .card {
+    background-color: rgba(9, 14, 16, .92);
   }
 }
