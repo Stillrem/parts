@@ -561,65 +561,105 @@ export const sources = [
 },
 
   /* --- PartSelect --- */
-  {
-    name: 'PartSelect',
-    searchUrl: (q)=> `${BASE_PS}/Search.aspx?SearchText=${encodeURIComponent(q)}`,
-    parser: async (html, q)=>{
-      const $ = cheerio.load(html);
-      const out = [];
+{
+  name: 'PartSelect',
+  searchUrl: (q)=> `${BASE_PS}/Search.aspx?SearchText=${encodeURIComponent(q)}`,
+  parser: async (html, q)=>{
+    const $ = cheerio.load(html);
+    const out = [];
 
-      $('.search-result, .ps-product-list__item, .product-list-item').each((_, el)=>{
-        const el$ = $(el);
-        const a$  = el$.find('a[href]').first();
+    // 1. Основные контейнеры (старые + новые варианты)
+    const containers = $(
+      '.search-result, ' +
+      '.ps-product-list__item, ' +
+      '.product-list-item, ' +
+      '.ps-search-results__item, ' +          // возможный новый класс
+      '.ps-search-results, ' +                // общий контейнер
+      'div[data-ps-product-id]'               // универсальный селектор по data-атрибуту
+    );
+
+    containers.each((_, el)=>{
+      const el$ = $(el);
+
+      // пробуем взять осмысленную ссылку на товар/модель
+      let a$ = el$.find('a[href*="/PartDetail.aspx"], a[href*="/Model.aspx"]').first();
+      if (!a$.length) {
+        a$ = el$.find('a[href]').first();
+      }
+
+      const href = a$.attr('href') || '';
+      if (!href) return;
+
+      const link = absUrl(href, BASE_PS);
+
+      const title = first(
+        el$.find('.product-title, .ps-product-list__title').text(),
+        el$.find('.search-result__title a').text(),
+        el$.find('h2, h3').first().text(),
+        a$.attr('title'),
+        a$.text()
+      );
+
+      let imgRaw =
+        el$.find('img').attr('data-src') ||
+        el$.find('img').attr('src') ||
+        '';
+      const image = absUrl(imgRaw, BASE_PS);
+
+      const blockText = t(el$.text());
+      const pn = pnText(blockText) || pnText(title) || pnText(link);
+
+      out.push({
+        title: t(title || q),
+        link,
+        image,
+        source: 'PartSelect',
+        part_number: pn
+      });
+    });
+
+    // 2. Fallback: если вдруг ничего не нашли по контейнерам —
+    // пробуем просто любые ссылки на PartSelect с PN
+    if (!out.length) {
+      $('a[href*="partselect.com"]').each((_, a)=>{
+        const a$ = $(a);
         const href = a$.attr('href') || '';
         if (!href) return;
 
         const link = absUrl(href, BASE_PS);
-
-        const title = first(
-          el$.find('.product-title, .ps-product-list__title').text(),
-          el$.find('h2, h3').first().text(),
-          a$.attr('title'),
-          a$.text()
-        );
-
-        let imgRaw =
-          el$.find('img').attr('data-src') ||
-          el$.find('img').attr('src') ||
-          '';
-        const image = absUrl(imgRaw, BASE_PS);
-
-        const blockText = t(el$.text());
-        const pn = pnText(blockText) || pnText(title) || pnText(link);
+        const title = t(a$.text()) || link;
+        const pn = pnText(title) || pnText(link);
 
         out.push({
-          title: t(title),
+          title,
           link,
-          image,
+          image: '',
           source: 'PartSelect',
           part_number: pn
         });
       });
+    }
 
-      if (!out.length && q){
-        out.push({
-          title: `Открыть поиск PartSelect: ${q}`,
-          link: `${BASE_PS}/Search.aspx?SearchText=${encodeURIComponent(q)}`,
-          image: '',
-          source: 'PartSelect',
-          part_number: pnText(q)
-        });
-      }
-
-      const seen = new Set();
-      return out.filter(x=>{
-        const k=x.link;
-        if (!k || seen.has(k)) return false;
-        seen.add(k);
-        return true;
+    // 3. Если всё равно пусто — хотя бы "Открыть поиск"
+    if (!out.length && q){
+      out.push({
+        title: `Открыть поиск PartSelect: ${q}`,
+        link: `${BASE_PS}/Search.aspx?SearchText=${encodeURIComponent(q)}`,
+        image: '',
+        source: 'PartSelect',
+        part_number: pnText(q)
       });
     }
-  },
+
+    const seen = new Set();
+    return out.filter(x=>{
+      const k = x.link;
+      if (!k || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }
+},
 
   /* --- Encompass --- */
   {
