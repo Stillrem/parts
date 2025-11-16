@@ -78,9 +78,9 @@ body {
   min-height: calc(100vh + env(safe-area-inset-bottom, 0px));
 
   padding:
-    calc(10px + env(safe-area-inset-top, 0px))
+    calc(14px + env(safe-area-inset-top, 0px))
     5vw
-    calc(16px + env(safe-area-inset-bottom, 0px));
+    calc(18px + env(safe-area-inset-bottom, 0px));
 
   border-radius: 22px;
   border: 1px solid var(--stroke);
