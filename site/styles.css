@@ -436,3 +436,58 @@ main {
 .hidden {
   display: none !important;
 }
+
+/* ===== FIX: не лезем под Dynamic Island / делаем аккуратную шапку ===== */
+
+/* сдвигаем весь контент вниз с учётом выреза */
+body {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 12px);
+}
+
+@supports (padding-top: constant(safe-area-inset-top)) {
+  body {
+    padding-top: calc(constant(safe-area-inset-top) + 12px);
+  }
+}
+
+/* шапка меньше и аккуратнее */
+header {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+header h1 {
+  font-size: 1.35rem;        /* был крупнее */
+  margin: 0 0 8px;           /* убираем лишний верхний отступ */
+  text-align: left;          /* как на скрине с отчётами */
+}
+
+/* основной контент тоже чуть ниже, но без лишних дыр */
+main {
+  padding-top: 6px;
+}
+
+/* выравниваем надписи и поля в форме поиска */
+#searchForm {
+  margin-top: 4px;
+  gap: 8px;
+}
+
+/* подписи «Поставщик / OEM / Только в наличии» – ровнее и компактнее */
+label.inline {
+  font-size: 12px;
+  margin-top: 2px;
+  padding-left: 2px;   /* чтобы текст начинался почти там же, где поле */
+}
+
+/* на широком экране делаем аккуратную сетку шапки */
+@media (min-width: 520px) {
+  #searchForm {
+    grid-template-rows: auto auto auto auto;
+    grid-template-areas:
+      "q       submit"
+      "supplier supplier"
+      "oem     stock"
+      "export  export";
+  }
+}
