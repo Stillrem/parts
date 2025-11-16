@@ -122,9 +122,9 @@ body {
 }
 
 .app-title {
-  margin: 0 0 10px;
+  margin: 0 0 6px;
   text-align: center;
-  font-size: 1.85rem;          /* компактнее, чем раньше */
+  font-size: 1.55rem;          /* компактнее, чем раньше */
   font-weight: 900;
   letter-spacing: .4px;
   color: transparent;
