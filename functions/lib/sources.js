@@ -469,7 +469,7 @@ export const sources = [
     const $ = cheerio.load(html);
     const out = [];
 
-    // нормализуем запрос модели (DV210AEW → DV210AEW)
+    // нормализуем запрос модели: DV210AEW, WM3770HWA, 11027072600 и т.п.
     const qModelRaw = String(q || '').toUpperCase().trim();
     const qModel = qModelRaw.replace(/[^A-Z0-9]/g, '');
 
@@ -479,23 +479,32 @@ export const sources = [
       let bestHref = '';
       let fallbackHref = '';
 
+      // выбираем лучшую ссылку внутри карточки
       el$.find('a[href]').each((_, a) => {
         const h = $(a).attr('href') || '';
-        if (!h || h === '/parts.html') return;
+        if (!h) return;
+
+        // отбрасываем абсолютно бесполезный общий каталог
+        if (h === '/parts.html') return;
 
         const cleanH = h.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-        // 1) идеальная ссылка: /parts-for-*
+        // 1) Ищем "parts-for-" — это ссылки на модели/parts-for-model-...
         if (/\/parts-for-/i.test(h)) {
-
-          // сравнение по началу: DV210AEW совпадает с DV210AEWXAA
-          if (!qModel || cleanH.startsWith(qModel)) {
+          if (!qModel) {
             bestHref = h;
-            return false;
+            return false; // break
+          }
+
+          // DV210AEW → найдётся в /parts-for-samsung-dv210aew-xaa.html
+          // 11027072600 → найдётся в /parts-for-model-kenmore-11027072600.html
+          if (cleanH.includes(qModel)) {
+            bestHref = h;
+            return false; // break
           }
         }
 
-        // 2) запасной вариант
+        // 2) Запасной вариант — первая более-менее осмысленная ссылка
         if (!fallbackHref) {
           fallbackHref = h;
         }
@@ -530,6 +539,7 @@ export const sources = [
       });
     });
 
+    // если ничего не нашли — хотя бы ссылка на поиск
     if (!out.length && q){
       out.push({
         title: `Открыть поиск AppliancePartsPros: ${q}`,
