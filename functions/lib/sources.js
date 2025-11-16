@@ -462,66 +462,95 @@ export const sources = [
   },
 
   /* --- AppliancePartsPros --- */
-  {
-    name: 'AppliancePartsPros',
-    searchUrl: (q)=> `${BASE_APP}/search.aspx?searchtext=${encodeURIComponent(q)}`,
-    parser: async (html, q)=>{
-      const $ = cheerio.load(html);
-      const out = [];
+{
+  name: 'AppliancePartsPros',
+  searchUrl: (q)=> `${BASE_APP}/search.aspx?searchtext=${encodeURIComponent(q)}`,
+  parser: async (html, q)=>{
+    const $ = cheerio.load(html);
+    const out = [];
 
-      // разные возможные контейнеры результатов
-      $('.searchProduct, .list-item, .product-list-item, .product').each((_, el)=>{
-        const el$ = $(el);
-        const a$  = el$.find('a[href]').first();
-        const href = a$.attr('href') || '';
-        if (!href) return;
+    // нормализованный запрос, чтобы узнавать модель в ссылках
+    const qNorm = String(q || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
 
-        const link = absUrl(href, BASE_APP);
+    // разные возможные контейнеры результатов
+    $('.searchProduct, .list-item, .product-list-item, .product').each((_, el)=>{
+      const el$ = $(el);
 
-        const title = first(
-          el$.find('.productname, .searchProductTitle').text(),
-          el$.find('h2, h3').first().text(),
-          a$.attr('title'),
-          a$.text()
-        );
+      // --- умный выбор ссылки ---
+      let hrefPreferred = '';
+      let hrefModel     = '';
+      let hrefAny       = '';
 
-        let imgRaw =
-          el$.find('img').attr('data-src') ||
-          el$.find('img').attr('src') ||
-          '';
-        const image = absUrl(imgRaw, BASE_APP);
+      el$.find('a[href]').each((_, a) => {
+        const h = $(a).attr('href') || '';
+        if (!h) return;
+        const hl = h.toLowerCase();
 
-        const blockText = t(el$.text());
-        const pn = pnText(blockText) || pnText(title) || pnText(link);
+        // 1) ссылки вида /parts-for-lg-wm3770hwa-00.html
+        if (!hrefPreferred && /parts-for-/i.test(h)) {
+          hrefPreferred = h;
+        }
 
-        out.push({
-          title: t(title),
-          link,
-          image,
-          source: 'AppliancePartsPros',
-          part_number: pn
-        });
+        // 2) ссылки, содержащие модель из запроса
+        if (!hrefModel && qNorm && hl.includes(qNorm)) {
+          hrefModel = h;
+        }
+
+        // 3) просто первая попавшаяся (fallback)
+        if (!hrefAny) hrefAny = h;
       });
 
-      if (!out.length && q){
-        out.push({
-          title: `Открыть поиск AppliancePartsPros: ${q}`,
-          link: `${BASE_APP}/search.aspx?searchtext=${encodeURIComponent(q)}`,
-          image: '',
-          source: 'AppliancePartsPros',
-          part_number: pnText(q)
-        });
-      }
+      const href = hrefPreferred || hrefModel || hrefAny;
+      if (!href) return;
 
-      const seen = new Set();
-      return out.filter(x=>{
-        const k=x.link;
-        if (!k || seen.has(k)) return false;
-        seen.add(k);
-        return true;
+      const link = absUrl(href, BASE_APP);
+
+      const title = first(
+        el$.find('.productname, .searchProductTitle').text(),
+        el$.find('h2, h3').first().text(),
+        el$.find('a[href]').first().attr('title'),
+        el$.text()
+      );
+
+      let imgRaw =
+        el$.find('img').attr('data-src') ||
+        el$.find('img').attr('src') ||
+        '';
+      const image = absUrl(imgRaw, BASE_APP);
+
+      const blockText = t(el$.text());
+      const pn = pnText(blockText) || pnText(title) || pnText(link);
+
+      out.push({
+        title: t(title),
+        link,
+        image,
+        source: 'AppliancePartsPros',
+        part_number: pn
+      });
+    });
+
+    if (!out.length && q){
+      out.push({
+        title: `Открыть поиск AppliancePartsPros: ${q}`,
+        link: `${BASE_APP}/search.aspx?searchtext=${encodeURIComponent(q)}`,
+        image: '',
+        source: 'AppliancePartsPros',
+        part_number: pnText(q)
       });
     }
-  },
+
+    const seen = new Set();
+    return out.filter(x=>{
+      const k = x.link;
+      if (!k || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }
+},
 
   /* --- PartSelect --- */
   {
