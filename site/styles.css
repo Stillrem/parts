@@ -1,17 +1,19 @@
-/* ========= ТЕМА ========= */
+/* ====== ТЕМА / ПЕРЕМЕННЫЕ ====== */
 :root {
   --primary: #52E0A5;
   --primary-2: #3AC7E0;
   --ink: #E9F7F2;
   --muted: #BFD6CD;
-  --bg: #05090b;
-  --glass: rgba(255,255,255,.08);
-  --glass-2: rgba(255,255,255,.06);
-  --stroke: rgba(255,255,255,.32);
-  --shadow: rgba(0,0,0,.80);
-}
+  --bg: #05090D;
 
-/* БАЗА */
+  --glass: rgba(255, 255, 255, 0.08);
+  --glass-2: rgba(255, 255, 255, 0.05);
+  --stroke: rgba(255, 255, 255, 0.25);
+  --shadow: rgba(0, 0, 0, 0.55);
+
+  /* поставь сюда свой лес, если нужен другой путь */
+  --bg-image: url('/forest-bg.jpg');
+}
 
 *,
 *::before,
@@ -26,450 +28,379 @@ body {
 
 body {
   margin: 0;
-  padding: 10px 10px 18px;
-  font-family:
-    ui-sans-serif, system-ui, -apple-system, "SF Pro Text",
-    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    Inter, "Helvetica Neue", Arial, sans-serif;
   color: var(--ink);
-  background: var(--bg);
+  background-color: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* фон леса под стеклом */
+.page-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(1200px 900px at 50% -20%, rgba(255, 255, 255, 0.16), transparent 60%),
+    radial-gradient(1200px 900px at 50% 120%, rgba(0, 0, 0, 0.7), transparent 60%),
+    var(--bg);
+  background-image:
+    var(--bg-image),
+    radial-gradient(1200px 900px at 50% -20%, rgba(255, 255, 255, 0.16), transparent 60%),
+    radial-gradient(1200px 900px at 50% 120%, rgba(0, 0, 0, 0.7), transparent 60%);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: contrast(0.95) saturate(0.9) brightness(0.8);
+  pointer-events: none;
+}
+
+/* ====== ОБОЛОЧКА-ПАНЕЛЬ ====== */
+.app-shell {
+  position: relative;
+  margin: env(safe-area-inset-top) auto env(safe-area-inset-bottom);
+  padding: 14px 14px 18px;
+  max-width: 780px;
+
+  min-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 8px);
+
+  border-radius: 28px;
+  background: linear-gradient(
+      160deg,
+      rgba(255, 255, 255, 0.12),
+      rgba(255, 255, 255, 0.03)
+    );
+  border: 1px solid var(--stroke);
+  backdrop-filter: blur(18px) saturate(170%);
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.35),
+    0 22px 45px -24px var(--shadow);
+
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  position: relative;
+}
+
+/* не режем скролл — пусть вся панель тянется по высоте контента */
+html,
+body {
   overflow-x: hidden;
 }
 
-/* Фон-лес под всем */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  background:
-    radial-gradient(1200px 800px at 70% -10%, rgba(255,255,255,.08) 0%, transparent 60%),
-    radial-gradient(900px 500px at 10% 110%, rgba(122,255,194,.05) 0%, transparent 60%),
-    url("IMG_0463.png") center/cover no-repeat;
-  filter: contrast(.9) saturate(.9) brightness(.65);
-  opacity: 0.9;
-  z-index: -3;
+/* ====== ШАПКА ====== */
+
+.page-header {
+  padding: 4px 6px 10px;
 }
 
-/* Большая матовая рамка-стекло от верха до низа */
-body::after {
-  content: "";
-  position: fixed;
-  left: 8px;
-  right: 8px;
-  top: 8px;
-  bottom: 8px;
-  border-radius: 26px;
-  background: rgba(5, 10, 12, .65);
-  border: 1px solid rgba(255,255,255,.26);
-  backdrop-filter: blur(22px) saturate(160%);
-  -webkit-backdrop-filter: blur(22px) saturate(160%);
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.25),
-    inset 0 -1px 0 rgba(255,255,255,.12),
-    0 26px 52px -26px var(--shadow);
-  z-index: -1;
-}
-
-/* Контейнеры */
-
-header,
-main {
-  width: 100%;
-  max-width: 780px;
-  margin: 0 auto;
-}
-
-header {
-  padding: 18px 18px 8px;
-}
-
-main {
-  padding: 0 18px 18px;
-  flex: 1;
-  overflow-y: auto;
-}
-
-/* ========= ЗАГОЛОВОК ========= */
-
-header h1 {
-  margin: 0 0 12px;
-  font-size: 26px;
-  font-weight: 900;
-  letter-spacing: .4px;
+.app-title {
+  margin: 0 0 10px;
+  font-size: clamp(1.45rem, 4.4vw, 1.9rem);
+  line-height: 1.15;
   text-align: left;
-  color: transparent;
 
-  background:
-    linear-gradient(
+  color: transparent;
+  background: linear-gradient(
       180deg,
-      rgba(255,255,255,.96),
-      rgba(255,255,255,.60) 45%,
-      rgba(255,255,255,.20) 90%
+      rgba(255, 255, 255, 0.96),
+      rgba(255, 255, 255, 0.6) 45%,
+      rgba(255, 255, 255, 0.2) 80%
     );
   -webkit-background-clip: text;
   background-clip: text;
-  -webkit-text-stroke: 1px rgba(255,255,255,.30);
+  -webkit-text-stroke: 1px rgba(0, 0, 0, 0.55);
   text-shadow:
-    0 2px 10px rgba(0,0,0,.60),
-    0 1px 0 rgba(255,255,255,.35);
+    0 2px 8px rgba(0, 0, 0, 0.7),
+    0 0 24px rgba(0, 0, 0, 0.5);
 }
 
-/* ========= ФОРМА ПОИСКА ========= */
+/* ====== ФОРМА ПОИСКА ====== */
 
-#searchForm {
-  display: grid;
-  grid-template-columns: 1fr;
-  grid-template-areas:
-    "q"
-    "search"
-    "supplier"
-    "oem"
-    "inStock"
-    "export";
+.search-form {
+  display: flex;
+  flex-direction: column;
   gap: 10px;
-  align-items: center;
-
-  padding: 18px 14px 16px;
-  border-radius: 22px;
-  background: var(--glass);
-  border: 1px solid var(--stroke);
-  backdrop-filter: blur(18px) saturate(160%);
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.28),
-    inset 0 -1px 0 rgba(0,0,0,.40);
 }
 
-/* Поле ввода */
-
-#q {
-  grid-area: q;
-  width: 100%;
-  border-radius: 999px;
-  padding: 13px 18px;
-  border: 1px solid rgba(255,255,255,.32);
-  background: linear-gradient(
-    180deg,
-    rgba(255,255,255,.20),
-    rgba(255,255,255,.06)
-  );
-  backdrop-filter: blur(12px) saturate(150%);
-  -webkit-backdrop-filter: blur(12px) saturate(150%);
-  color: var(--ink);
-  font-size: 14px;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.35),
-    inset 0 -1px 0 rgba(0,0,0,.40);
-}
-
-#q::placeholder {
-  color: rgba(191,214,205,.85);
-}
-
-/* Кнопка “Искать” */
-
-#searchForm button[type="submit"] {
-  grid-area: search;
-  width: 100%;
-  border-radius: 999px;
-  padding: 13px 18px;
-  border: 1px solid rgba(255,255,255,.38);
-  background: linear-gradient(135deg, var(--primary), var(--primary-2));
-  color: #081513;
-  font-weight: 800;
-  font-size: 15px;
-  cursor: pointer;
-  letter-spacing: .3px;
-  box-shadow:
-    0 14px 30px -16px rgba(82,224,165,.9),
-    inset 0 1px 0 rgba(255,255,255,.35);
-  transition: transform .07s ease, box-shadow .15s ease, filter .15s ease;
-}
-
-#searchForm button[type="submit"]:active {
-  transform: translateY(1px);
-  box-shadow:
-    0 8px 18px -12px rgba(82,224,165,.8),
-    inset 0 1px 0 rgba(255,255,255,.30);
-  filter: brightness(.97);
-}
-
-/* Поставщик — аккуратный вертикальный блок */
-
-#searchForm .inline:nth-of-type(1) {
-  grid-area: supplier;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 13px;
-  color: rgba(233,247,242,.9);
-}
-
-#searchForm .inline:nth-of-type(1) > select {
-  width: 100%;
-}
-
-#supplier {
-  border-radius: 999px;
-  padding: 12px 18px;
-  border: 1px solid rgba(255,255,255,.32);
-  background: linear-gradient(
-    180deg,
-    rgba(255,255,255,.20),
-    rgba(255,255,255,.06)
-  );
-  backdrop-filter: blur(12px) saturate(150%);
-  -webkit-backdrop-filter: blur(12px) saturate(150%);
-  color: var(--ink);
-  font-size: 14px;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.35),
-    inset 0 -1px 0 rgba(0,0,0,.40);
-}
-
-/* Чекбоксы — по одному в строке */
-
-#searchForm .inline:nth-of-type(2),
-#searchForm .inline:nth-of-type(3) {
-  display: inline-flex;
-  align-items: center;
+/* поле + кнопка */
+.search-main-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.9fr) minmax(0, 1.1fr);
   gap: 8px;
-  font-size: 13px;
-  color: rgba(233,247,242,.85);
 }
 
-#searchForm .inline:nth-of-type(2) { grid-area: oem; }
-#searchForm .inline:nth-of-type(3) { grid-area: inStock; }
-
-#searchForm input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-}
-
-/* Кнопка Экспорт CSV */
-
-#exportBtn {
-  grid-area: export;
+.search-input,
+.select {
   width: 100%;
-  border-radius: 999px;
-  padding: 12px 18px;
-  border: 1px solid rgba(255,255,255,.32);
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  padding: 11px 16px;
+  font-size: 16px;              /* фикс зума на iOS */
+  color: var(--ink);
+
   background: linear-gradient(
     180deg,
-    rgba(255,255,255,.12),
-    rgba(0,0,0,.75)
+    rgba(255, 255, 255, 0.2),
+    rgba(8, 14, 18, 0.8)
   );
-  color: #f4f5f7;
-  font-weight: 700;
-  font-size: 14px;
-  cursor: pointer;
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
   box-shadow:
-    0 10px 24px -16px rgba(0,0,0,.9),
-    inset 0 1px 0 rgba(255,255,255,.25);
-  transition: transform .07s ease, box-shadow .15s ease, filter .15s ease;
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.55);
+
+  outline: none;
+  appearance: none;
 }
 
-#exportBtn:active {
+.search-input::placeholder {
+  color: rgba(227, 241, 238, 0.7);
+}
+
+.select {
+  padding-right: 38px;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23A5C7C1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 18px;
+}
+
+/* кнопки */
+
+.btn {
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  padding: 11px 16px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  color: var(--ink);
+
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.15),
+    rgba(0, 0, 0, 0.8)
+  );
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.7),
+    0 12px 30px -16px var(--shadow);
+  transition: transform 0.06s ease, box-shadow 0.18s ease,
+    background 0.18s ease;
+}
+
+.btn:active {
   transform: translateY(1px);
   box-shadow:
-    0 6px 14px -10px rgba(0,0,0,.9),
-    inset 0 1px 0 rgba(255,255,255,.2);
-  filter: brightness(.96);
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.7),
+    0 8px 20px -14px var(--shadow);
 }
 
-/* ========= ЭКВИВАЛЕНТЫ / РЕЗУЛЬТАТЫ ========= */
-
-.hidden {
-  display: none !important;
+.btn-primary {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.18),
+      rgba(0, 0, 0, 0.7)
+    ),
+    linear-gradient(135deg, var(--primary), var(--primary-2));
+  color: #041411;
 }
 
-#equivBox {
-  margin-top: 6px;
-  margin-bottom: 10px;
-  padding: 10px 14px;
-  border-radius: 16px;
-  background: var(--glass-2);
-  border: 1px solid rgba(255,255,255,.24);
-  backdrop-filter: blur(16px) saturate(150%);
-  -webkit-backdrop-filter: blur(16px) saturate(150%);
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.25),
-    inset 0 -1px 0 rgba(0,0,0,.35);
-  font-size: 13px;
-}
-
-.equiv-title {
-  font-weight: 700;
-  margin-bottom: 6px;
-  color: rgba(233,247,242,.95);
-}
-
-.grid,
-#resultsGrid {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+/* кнопка экспорта — на всю ширину, чуть ниже */
+.export-btn {
+  width: 100%;
   margin-top: 4px;
 }
 
-/* Карточка результата */
+/* ====== БЛОК ФИЛЬТРОВ ====== */
+
+.filters-block {
+  margin-top: 4px;
+  padding: 8px 10px 4px;
+  border-radius: 22px;
+  background: var(--glass-2);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.55);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.filter-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.filter-caption {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.filter-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.filter-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+}
+
+/* ====== ОБЛАСТЬ РЕЗУЛЬТАТОВ ====== */
+
+.results-area {
+  margin-top: 10px;
+  padding: 4px 4px 2px;
+  flex: 1 1 auto;
+}
+
+.equiv {
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  border-radius: 18px;
+  background: var(--glass-2);
+  border: 1px solid rgba(255, 255, 255, 0.23);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+}
+
+.equiv-title {
+  font-size: 13px;
+  letter-spacing: 0.2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+/* сетка карточек — колонка, карточки поменьше */
+.grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ====== КАРТОЧКИ ====== */
 
 .card {
   display: flex;
-  align-items: stretch;
-  border-radius: 22px;
-  overflow: hidden;
-  background:
-    radial-gradient(circle at 0% 0%, rgba(82,224,165,.35), transparent 55%),
-    rgba(6,10,14,.88);
-  border: 1px solid rgba(255,255,255,.30);
-  backdrop-filter: blur(18px) saturate(160%);
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  gap: 10px;
+  padding: 10px;
+  border-radius: 20px;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(18px) saturate(170%);
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.25),
-    0 18px 40px -20px rgba(0,0,0,.85);
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.6),
+    0 14px 32px -20px var(--shadow);
 }
 
-/* Левая колонка с картинкой */
-
 .thumb {
-  width: 110px;
-  min-width: 110px;
-  background: linear-gradient(180deg, #1f4337, #0c1517);
+  flex: 0 0 86px;
+  height: 86px;
+  border-radius: 15px;
+  overflow: hidden;
+  background: radial-gradient(circle at 0 0, #2c4b3f, #050809);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .thumb img {
-  display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
   object-fit: cover;
 }
 
-/* Правая часть карточки */
-
-.body {
-  flex: 1;
-  padding: 12px 14px 12px;
+.card .body {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.body .title {
-  font-size: 15px;
+.card .title {
+  font-size: 14.6px;
   font-weight: 700;
-  color: #f5f7f9;
-  margin-bottom: 2px;
 }
 
-.body .meta {
+.card .meta,
+.card .price,
+.card .compat {
   font-size: 13px;
-  color: rgba(191,214,205,.90);
+  color: var(--muted);
 }
 
-.body .price {
-  font-size: 14px;
-  font-weight: 700;
-  margin-top: 4px;
-  color: var(--primary-2);
+.card .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
 }
 
-.body .compat {
+.card .chips span {
+  padding: 4px 8px;
+  border-radius: 999px;
   font-size: 12px;
-  color: rgba(191,214,205,.85);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
-/* Чипы */
-
-.body .chips {
-  margin-top: 6px;
+.card .links {
+  margin-top: 4px;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 
-.body .chips span {
+.card .links a {
   padding: 5px 10px;
   border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #e9f7f2;
-  background: linear-gradient(
-    180deg,
-    rgba(255,255,255,.16),
-    rgba(0,0,0,.65)
-  );
-  border: 1px solid rgba(255,255,255,.24);
-}
-
-/* Кнопки-ссылки */
-
-.body .links {
-  margin-top: 8px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.body .links a,
-.body .links button {
-  padding: 7px 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(255,255,255,.28);
-  background: linear-gradient(
-    180deg,
-    rgba(255,255,255,.16),
-    rgba(0,0,0,.75)
-  );
   font-size: 12px;
-  font-weight: 600;
-  color: #f2f5f7;
   text-decoration: none;
-  cursor: pointer;
-  box-shadow:
-    0 8px 18px -12px rgba(0,0,0,.9),
-    inset 0 1px 0 rgba(255,255,255,.25);
+  color: var(--ink);
+  background: linear-gradient(
+    135deg,
+    rgba(82, 224, 165, 0.18),
+    rgba(58, 199, 224, 0.08)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
-/* ========= АДАПТИВ ========= */
+/* ====== ПРОЧЕЕ ====== */
 
-@media (min-width: 720px) {
-  header {
-    padding-top: 22px;
+.hidden {
+  display: none !important;
+}
+
+@media (max-width: 640px) {
+  .app-shell {
+    margin: 8px 6px 10px;
+    border-radius: 24px;
+    padding: 12px 12px 16px;
   }
 
-  header h1 {
-    font-size: 28px;
-  }
-
-  #searchForm {
-    padding: 20px 20px 18px;
+  .filters-block {
+    padding-inline: 10px;
   }
 
   .thumb {
-    width: 140px;
-    min-width: 140px;
-  }
-
-  .body {
-    padding: 14px 16px 14px;
-  }
-}
-
-/* Фолбэк, если нет backdrop-filter */
-
-@supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
-  #searchForm,
-  body::after,
-  #equivBox,
-  .card {
-    background-color: rgba(9, 14, 16, .92);
+    flex-basis: 78px;
+    height: 78px;
   }
 }
