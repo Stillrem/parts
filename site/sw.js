@@ -1,5 +1,5 @@
 /* sw.js */
-const VERSION = 'v2.0.0';
+const VERSION = 'v3.0.1';
 const STATIC_CACHE = `static-${VERSION}`;
 const RUNTIME_CACHE = `runtime-${VERSION}`;
 const IMG_CACHE = `img-${VERSION}`;
@@ -8,7 +8,7 @@ const IMG_CACHE = `img-${VERSION}`;
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/style.css',
+  '/styles.css',
   '/app.js',
   '/manifest.webmanifest'
 ];
