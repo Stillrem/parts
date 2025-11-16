@@ -79,7 +79,7 @@ body {
   padding:
     calc(2px + env(safe-area-inset-top, 0px))
     5vw
-    calc(2px + env(safe-area-inset-bottom, 0px));
+    env(safe-area-inset-bottom, 0px));
 
   border-radius: 22px;
   border: 1px solid var(--stroke);
