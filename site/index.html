@@ -2,8 +2,12 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <!-- 🔹 без зума при фокусе на инпутах (шрифт >=16px в CSS) -->
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <!-- фикс увеличения при фокусе на input на iOS -->
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no"
+  >
+
   <title>Parts Hub-Поиск запчастей</title>
   <link rel="stylesheet" href="/styles.css">
 
@@ -18,59 +22,63 @@
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
 </head>
 <body>
-  <!-- Фон остаётся снаружи, внутри — одна большая стеклянная рамка -->
+  <!-- фон леса остаётся сзади, стекло сверху -->
+  <div class="page-bg" aria-hidden="true"></div>
+
+  <!-- большая стеклянная рамка, тянется по высоте, внутри и шапка, и результаты -->
   <div class="app-shell glass-shell">
     <header class="page-header">
       <h1 class="app-title">Parts Hub-Поиск запчастей</h1>
 
       <form id="searchForm" class="search-form">
-        <!-- Основной ряд: поле + кнопка -->
+        <!-- верхний ряд: поле + кнопка -->
         <div class="search-main-row">
-          <div class="field-wrapper">
-            <input
-              id="q"
-              type="text"
-              placeholder="Модель или парт-номер (например 5304509451 / FFMV164LSA)"
-              autocomplete="off"
-            >
-          </div>
-          <button type="submit" class="btn-primary main-search-btn">Искать</button>
+          <input
+            id="q"
+            type="text"
+            class="search-input"
+            placeholder="Модель или парт-номер (например 5304509451 / FFMV164LSA)"
+            autocomplete="off"
+          >
+          <button type="submit" class="btn btn-primary search-btn">
+            Искать
+          </button>
         </div>
 
-        <!-- Блок фильтров -->
+        <!-- блок с поставщиком и галочками, аккуратная вертикальная колонка -->
         <div class="filters-block">
-          <div class="filters-column">
-            <div class="field-label">Поставщик:</div>
+          <label class="filter-label">
+            <span class="filter-caption">Поставщик:</span>
+            <select id="supplier" class="select">
+              <option value="">Все</option>
+              <option value="SearsPartsDirect">SearsPartsDirect</option>
+              <option value="RepairClinic">RepairClinic</option>
+            </select>
+          </label>
 
-            <div class="select-wrapper">
-              <select id="supplier">
-                <option value="">Все</option>
-                <option value="SearsPartsDirect">SearsPartsDirect</option>
-                <option value="RepairClinic">RepairClinic</option>
-              </select>
-            </div>
+          <label class="filter-checkbox">
+            <input type="checkbox" id="onlyOEM">
+            <span>Только OEM</span>
+          </label>
 
-            <label class="check-row">
-              <input type="checkbox" id="onlyOEM">
-              <span>Только OEM</span>
-            </label>
-
-            <label class="check-row">
-              <input type="checkbox" id="onlyInStock">
-              <span>Только в наличии</span>
-            </label>
-          </div>
+          <label class="filter-checkbox">
+            <input type="checkbox" id="onlyInStock">
+            <span>Только в наличии</span>
+          </label>
         </div>
 
-        <!-- Кнопка экспорта -->
-        <button type="button" id="exportBtn" class="btn-secondary export-btn">
+        <button
+          type="button"
+          id="exportBtn"
+          class="btn export-btn"
+        >
           Экспорт CSV
         </button>
       </form>
     </header>
 
-    <main class="page-main">
-      <div id="equivBox" class="equiv-box hidden">
+    <main class="results-area">
+      <div id="equivBox" class="equiv hidden">
         <div class="equiv-title">Эквиваленты:</div>
         <div id="equivList"></div>
       </div>
@@ -79,9 +87,9 @@
     </main>
   </div>
 
-  <!-- Шаблон карточки результата -->
+  <!-- шаблон карточки результата -->
   <template id="cardTmpl">
-    <article class="card glass-card">
+    <article class="card">
       <div class="thumb">
         <img loading="lazy" alt="part image">
       </div>
