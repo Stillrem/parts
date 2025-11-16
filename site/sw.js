@@ -1,5 +1,5 @@
 /* sw.js */
-const VERSION = 'v1.0.0';
+const VERSION = 'v2.0.0';
 const STATIC_CACHE = `static-${VERSION}`;
 const RUNTIME_CACHE = `runtime-${VERSION}`;
 const IMG_CACHE = `img-${VERSION}`;
