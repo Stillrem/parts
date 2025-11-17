@@ -1,5 +1,5 @@
 /* sw.js */
-const VERSION = 'v3.0.2';
+const VERSION = 'v3.0.3';
 const STATIC_CACHE = `static-${VERSION}`;
 const RUNTIME_CACHE = `runtime-${VERSION}`;
 const IMG_CACHE = `img-${VERSION}`;
@@ -7,10 +7,10 @@ const IMG_CACHE = `img-${VERSION}`;
 // что считаем «статикой»
 const STATIC_ASSETS = [
   '/',
-  '/index.html.off',
-  '/styles.off.css',
-  '/app.is.off',
-  '/manifest.webmanifest.off'
+  '/index.html',
+  '/styles.css',
+  '/app.js',
+  '/manifest.webmanifest'
 ];
 
 // install: прогреваем статику
