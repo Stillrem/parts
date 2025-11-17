@@ -568,20 +568,22 @@ export const sources = [
     const $ = cheerio.load(html);
     let out = [];
 
-    // 1. Основные контейнеры (старые + новые варианты страниц поиска)
+    // 0. нормализованный запрос (на всякий случай)
+    const qNorm = String(q || '').toUpperCase().replace(/[^A-Z0-9]/g,'');
+
+    // 1. Старый / поисковый layout
     const containers = $(
       '.search-result, ' +
       '.ps-product-list__item, ' +
       '.product-list-item, ' +
-      '.ps-search-results__item, ' +          // возможный новый класс
-      '.ps-search-results, ' +                // общий контейнер
-      'div[data-ps-product-id]'               // универсальный селектор по data-атрибуту
+      '.ps-search-results__item, ' +
+      '.ps-search-results, ' +
+      'div[data-ps-product-id]'
     );
 
     containers.each((_, el)=>{
       const el$ = $(el);
 
-      // пробуем взять осмысленную ссылку на товар/модель
       let a$ = el$.find('a[href*="/PartDetail.aspx"], a[href*="/Model.aspx"]').first();
       if (!a$.length) {
         a$ = el$.find('a[href]').first();
@@ -607,7 +609,7 @@ export const sources = [
       const image = absUrl(imgRaw, BASE_PS);
 
       const blockText = t(el$.text());
-      const pn = pnText(blockText) || pnText(title) || pnText(link);
+      const pn = pnText(blockText) || pnText(title) || pnText(link) || qNorm;
 
       out.push({
         title: t(title || q),
@@ -618,54 +620,47 @@ export const sources = [
       });
     });
 
-    // 2. Если это не страница поиска, а модельная страница /Models/...,
-    // контейнеры выше могут ничего не найти.
-    // Тогда пробуем вытащить все ссылки на детали по шаблону /PS123456-... или PartDetail.aspx
+    // 2. Если это страница модели (типа /Models/11027072600/)
+    //    — вытаскиваем все ссылки на детали /PSxxxx.aspx
     if (!out.length) {
-      $('a[href]').each((_, a)=>{
-        const a$ = $(a);
+      $('a[href^="/PS"]').each((_, a)=>{
+        const a$   = $(a);
         const href = a$.attr('href') || '';
         if (!href) return;
 
-        // Деталь PartSelect обычно выглядит так:
-        //   /PS5136124-Whirlpool-W10536347-Drain-Pump-Assembly.htm
-        // или через PartDetail.aspx
-        if (!/\/PS\d+/i.test(href) && !/PartDetail\.aspx/i.test(href)) return;
-
-        const link = absUrl(href, BASE_PS);
+        const link  = absUrl(href, BASE_PS);
         const title = t(a$.text()) || link;
-        const pn = pnText(title) || pnText(link);
+        const pn    = pnText(title) || pnText(link) || qNorm;
 
         out.push({
           title,
           link,
-          image: '',          // картинку можно добить позже, хотя бы будет ссылка
+          image: '',              // у модели обычно нет миниатюрок на списке
           source: 'PartSelect',
           part_number: pn
         });
       });
     }
 
-    // 3. Старый фолбэк "Открыть поиск", если вообще ничего не нашли
+    // 3. Fallback: если всё равно пусто —
+    //    просто дать ссылку "Открыть поиск PartSelect"
     if (!out.length && q){
       out.push({
         title: `Открыть поиск PartSelect: ${q}`,
         link: `${BASE_PS}/Search.aspx?SearchText=${encodeURIComponent(q)}`,
         image: '',
         source: 'PartSelect',
-        part_number: pnText(q)
+        part_number: pnText(q) || qNorm
       });
     }
 
     const seen = new Set();
-    out = out.filter(x=>{
+    return out.filter(x=>{
       const k = x.link;
       if (!k || seen.has(k)) return false;
       seen.add(k);
       return true;
     });
-
-    return out;
   }
 },
 
